@@ -2,46 +2,58 @@
 //! own test binary (one process, one test) instead of `extension.rs`, where
 //! it would race every other test's `start` call.
 
+use arma_rs::testing::Extension;
 use minerva::init;
 
-/// A syntactically invalid address: `start` can only succeed with it if the
-/// environment override replaced it.
-const UNUSABLE_SQF_ADDR: &str = "\"not-an-address\"";
+const ENV: &str = "MINERVA_LISTEN_ADDR";
+
+fn quoted(addr: &str) -> Vec<String> {
+    vec![format!("\"{addr}\"")]
+}
+
+/// Sets the override, runs `start` with `sqf_addr` on a fresh extension and
+/// stops it again, returning `start`'s `(result, code)`.
+///
+/// The server is stopped (which joins its thread) before returning so that no
+/// thread other than the test harness's is alive at the next `set_var`.
+fn start_with_env(env: Option<&str>, sqf_addr: &str) -> (String, i32) {
+    // SAFETY: this is the only test in the binary, and every server started by
+    // an earlier call has been stopped and joined, so no other thread can be
+    // reading or writing the environment while we change it.
+    unsafe {
+        match env {
+            Some(value) => std::env::set_var(ENV, value),
+            None => std::env::remove_var(ENV),
+        }
+    }
+    let extension: Extension = init().testing();
+    let (result, code) = extension.call("start", Some(quoted(sqf_addr)));
+    let (_, stop_code) = extension.call("stop", None);
+    assert_eq!(stop_code, 0);
+    (result, code)
+}
 
 #[test]
 fn start_honours_listen_addr_env() {
-    // SAFETY: this is the only test in the binary, so nothing else reads or
-    // writes the environment while it runs.
-    unsafe { std::env::set_var("MINERVA_LISTEN_ADDR", "") };
-    let (result, code) = init()
-        .testing()
-        .call("start", Some(vec![UNUSABLE_SQF_ADDR.to_string()]));
-    assert_ne!(code, 0, "empty override must fall back to the SQF address");
-    assert!(result.contains("invalid address"), "{result}");
-
-    // SAFETY: see above.
-    unsafe { std::env::set_var("MINERVA_LISTEN_ADDR", "127.0.0.1:0") };
-    let extension = init().testing();
-    let (bound, code) = extension.call("start", Some(vec![UNUSABLE_SQF_ADDR.to_string()]));
+    // An invalid SQF address can only succeed if the override replaced it, and
+    // a failure names whichever address `start` actually tried.
+    let (bound, code) = start_with_env(Some("127.0.0.1:0"), "not-an-address");
     assert_eq!(code, 0, "override must replace the SQF address: {bound}");
     assert!(bound.starts_with("127.0.0.1:"), "{bound}");
     assert_ne!(bound, "127.0.0.1:0", "must report the port actually bound");
 
-    // SAFETY: see above.
-    unsafe { std::env::set_var("MINERVA_LISTEN_ADDR", "not-an-address") };
-    let (result, code) = init()
-        .testing()
-        .call("start", Some(vec!["\"127.0.0.1:0\"".to_string()]));
-    assert_ne!(
-        code, 0,
-        "a bad override must not fall back to the SQF address"
-    );
-    assert!(result.contains("invalid address"), "{result}");
+    let (error, code) = start_with_env(Some("bad-override"), "127.0.0.1:0");
+    assert_ne!(code, 0, "a bad override must not fall back to SQF");
+    assert!(error.contains("bad-override"), "{error}");
 
-    // SAFETY: see above.
-    unsafe { std::env::remove_var("MINERVA_LISTEN_ADDR") };
-    let (_, code) = init()
-        .testing()
-        .call("start", Some(vec!["\"127.0.0.1:0\"".to_string()]));
+    // Empty counts as unset: the SQF address is tried, not the empty string.
+    let (error, code) = start_with_env(Some(""), "not-an-address");
+    assert_ne!(code, 0);
+    assert!(error.contains("not-an-address"), "{error}");
+
+    let (_, code) = start_with_env(Some(""), "127.0.0.1:0");
+    assert_eq!(code, 0, "empty override must use the SQF address");
+
+    let (_, code) = start_with_env(None, "127.0.0.1:0");
     assert_eq!(code, 0, "unset override must use the SQF address");
 }
