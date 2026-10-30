@@ -1,0 +1,21 @@
+# Cargo
+/target
+
+# rustfmt backups
+**/*.rs.bk
+
+# MSVC debug info
+*.pdb
+
+# HEMTT (arma3/)
+*.pbo
+.hemttout
+hemtt
+hemtt.exe
+*.biprivatekey
+.hemttprivatekey
+/arma3/releases/
+
+# Extension binaries CI copies next to .hemtt/ for `hemtt release`
+/arma3/minerva_x64.dll
+/arma3/minerva_x64.so

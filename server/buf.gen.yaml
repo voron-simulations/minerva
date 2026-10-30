@@ -5,5 +5,7 @@ plugins:
     out: src/gen
   - remote: buf.build/community/neoeinstein-tonic:v0.5.0
     out: src/gen
+# The protos live in this repo; generating from the local directory (not the
+# published BSR module) keeps the committed code in lockstep with them.
 inputs:
-  - module: buf.build/voron-simulations/minerva
+  - directory: ../proto
