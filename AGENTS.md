@@ -11,7 +11,7 @@ fit and how to add an engine: `docs/architecture.md`.
 - `arma3/` — Rust crate `minerva-arma3` (cdylib `minerva`) plus the HEMTT Arma addon. See `arma3/AGENTS.md`.
 - `docs/` — `contract.md` (protocol), `adapter.md` and `in-game-testing.md` (Arma 3), `architecture.md`.
 - `adr/` — architecture decision records.
-- `.github/workflows/` — `ci.yml` (everything), `build.yml` (reusable addon build), `nightly.yml`.
+- `.github/workflows/` — `proto.yml` (buf lint/breaking/BSR push), `ci.yml` (Rust, generated-code and addon checks), `build.yml` (reusable addon build), `nightly.yml`. No job is path-filtered: every PR runs everything.
 
 ## Build and test
 

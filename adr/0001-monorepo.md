@@ -27,7 +27,9 @@ Merge the three repositories into one, `voron-simulations/minerva`, with history
   `minerva-arma3` depends on `minerva-server` by path.
 - `server/buf.gen.yaml` generates from `../proto`, not from the BSR, so the committed
   bindings always correspond to the protos in the same commit.
-- One CI workflow covers all parts; the addon build and the nightly release are separate
+- `ci.yml` covers the Rust crates, generated-code freshness and the addon; `proto.yml` runs
+  the buf pipeline (a separate workflow because toggling the `buf skip breaking` label
+  must rerun only it); the addon build and the nightly release are reusable/separate
   workflows.
 
 ## Consequences

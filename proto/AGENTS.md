@@ -44,9 +44,10 @@ Run lint, format check and build before opening a PR. After any change, regenera
 server bindings (`cd ../server && buf generate`) and commit the diff; CI's `gen-check` job
 fails otherwise.
 
-CI's `proto` job (`bufbuild/buf-action`, `input: proto`) runs the same checks plus a
+The `proto.yml` workflow (`bufbuild/buf-action`, `input: proto`) runs the same checks plus a
 breaking-change check against the PR base branch. The `buf skip breaking` PR label skips
-that check for an intentional break; adding or removing the label reruns CI.
+that check for an intentional break; adding or removing the label reruns only this workflow,
+which is why it is separate from `ci.yml`.
 
 ## Publishing (BSR)
 
