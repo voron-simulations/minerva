@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo build",
+      "type": "cargo",
+      "command": "build",
+      "problemMatcher": ["$rustc"],
+      "group": "build"
+    },
+    {
+      "label": "HEMTT build",
+      "type": "shell",
+      "command": "hemtt",
+      "args": ["build"],
+      "options": { "cwd": "${workspaceFolder}/arma3" },
+      "group": { "kind": "build", "isDefault": true },
+      "dependsOn": "cargo build"
+    },
+    {
+      "label": "buf: build",
+      "type": "shell",
+      "command": "buf",
+      "args": ["build"],
+      "options": { "cwd": "${workspaceFolder}/proto" },
+      "problemMatcher": [],
+      "group": "build",
+      "dependsOn": "buf: format"
+    },
+    {
+      "label": "buf: format",
+      "type": "shell",
+      "command": "buf",
+      "args": ["format", "-w"],
+      "options": { "cwd": "${workspaceFolder}/proto" },
+      "problemMatcher": []
+    },
+    {
+      "label": "buf: lint",
+      "type": "shell",
+      "command": "buf",
+      "args": ["lint"],
+      "options": { "cwd": "${workspaceFolder}/proto" },
+      "problemMatcher": []
+    }
+  ]
+}
