@@ -125,7 +125,6 @@ fn cmd_start(ctx: Context, sqf_addr: String) -> Result<String, String> {
     };
     let handle = ServerHandle::spawn(config, sink).map_err(|err| err.to_string())?;
     let bound = handle.local_addr().to_string();
-    tracing::info!(%sqf_addr, %addr, %bound, "minerva: server started");
     *guard = Some(handle);
     Ok(bound)
 }

@@ -18,7 +18,14 @@ GVAR(cycleCursor) = 0;
 // very next frame.
 GVAR(dirtyGroups) = [];
 
-["start", [GVAR(listenAddress)]] call FUNC(call);
+// The extension reports the address it actually bound, which
+// MINERVA_LISTEN_ADDR can make differ from GVAR(listenAddress). Log it so an
+// operator can see where the server is listening; nil means start failed and
+// fnc_call already reported why.
+private _listening = ["start", [GVAR(listenAddress)]] call FUNC(call);
+if (!isNil "_listening") then {
+    diag_log format ["[minerva] gRPC listening on %1", _listening];
+};
 ["reset"] call FUNC(call);
 ["sim:info", [worldName, [worldSize, worldSize], GVAR(factions), date]] call FUNC(call);
 

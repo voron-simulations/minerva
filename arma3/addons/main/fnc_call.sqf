@@ -7,6 +7,7 @@ private _args = param [1, [], [[]]];
 private _resultArray = "minerva" callExtension [_function, _args];
 
 _resultArray params ["_result", "_retcode", "_errcode"];
+private _failed = _retcode != 0 || {_errcode != 0 && {_errcode != 301}};
 if (_errcode != 0 && _errcode != 301) then {
 	switch (_errcode) do {
 		case 101: { _errcode = "SYNTAX_ERROR_WRONG_PARAMS_SIZE"; };
@@ -19,6 +20,10 @@ if (_errcode != 0 && _errcode != 301) then {
 if (_retcode != 0) then {
 	["Function '%1' returned code %2: %3", _function, _retcode, _result] call BIS_fnc_error;
 };
+
+// On failure _result is error text, not a value; the error was reported above,
+// so callers get nil rather than something they could mistake for a result.
+if (_failed) exitWith {nil};
 
 // Return the unwrapped call result without the error codes
 _result;

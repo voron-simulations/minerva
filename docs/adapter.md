@@ -7,12 +7,13 @@ what's specific to the Arma 3 adapter (`arma3/`) -- a client should not assume a
 ## Configuration
 
 - The gRPC listen address defaults to `127.0.0.1:50051`. SQF can change it by setting
-  `GVAR(listenAddress)` before `postInit` runs (`addons/main/XEH_postInit.sqf`).
+  `GVAR(listenAddress)` before `postInit` runs (`arma3/addons/main/XEH_postInit.sqf`).
 - The `MINERVA_LISTEN_ADDR` environment variable of the Arma process overrides whatever SQF
   passes to `start`. A dedicated server has no mission hook to set `GVAR(listenAddress)`, so
   this is how a service manager (e.g. a systemd unit) configures it. An empty value counts as
   unset; a non-empty but unparsable value makes `start` fail rather than fall back to SQF's
-  address. `start` returns the address actually bound, so `:0` reports the real port.
+  address. `start` returns the address actually bound, so `:0` reports the real port, and the
+  addon writes `[minerva] gRPC listening on <addr>` to the `.rpt` log once it has started.
 
 ## Coordinates and time
 
