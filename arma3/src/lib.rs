@@ -2,6 +2,7 @@
 //! server's [`minerva_server::StateCache`] and executes commands dispatched
 //! back to it. See `AGENTS.md` for the SQF side.
 
+use std::env::VarError;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -14,6 +15,21 @@ mod convert;
 mod sink;
 
 use sink::ArmaCommandSink;
+
+/// A dedicated server has no mission hook to set `GVAR(listenAddress)` before
+/// `postInit` runs, so the operator (e.g. a systemd unit) overrides the
+/// address from the environment instead.
+const LISTEN_ADDR_ENV: &str = "MINERVA_LISTEN_ADDR";
+
+/// Picks the address `start` binds. An empty override counts as unset so that
+/// `Environment=MINERVA_LISTEN_ADDR=` in a unit file doesn't turn into a
+/// confusing "invalid address \"\"" failure.
+fn resolve_listen_addr(sqf_arg: &str, env_override: Option<&str>) -> String {
+    match env_override {
+        Some(addr) if !addr.is_empty() => addr.to_string(),
+        _ => sqf_arg.to_string(),
+    }
+}
 
 /// Cloning just clones the inner `Arc`s, so a clone obtained from a
 /// `Context` borrow can outlive that borrow (needed in [`cmd_start`], which
@@ -73,9 +89,10 @@ pub fn init() -> Extension {
         .finish()
 }
 
-/// Idempotent: if already started, returns the existing bound address
-/// without touching `addr`.
-fn cmd_start(ctx: Context, addr: String) -> Result<String, String> {
+/// Idempotent: if already started, returns the existing bound address without
+/// touching `sqf_addr` or the environment. Otherwise binds `sqf_addr`, unless
+/// [`LISTEN_ADDR_ENV`] overrides it, and returns the address actually bound.
+fn cmd_start(ctx: Context, sqf_addr: String) -> Result<String, String> {
     // Owned (Arc-backed) clone so it outlives the `&ctx` borrow it came
     // from — `ctx` itself is moved into the sink below. `guard` then
     // borrows from this owned `app`, not from `ctx`, so it can stay held
@@ -88,6 +105,16 @@ fn cmd_start(ctx: Context, addr: String) -> Result<String, String> {
         return Ok(handle.local_addr().to_string());
     }
 
+    // `var` (not `var_os`) so a set-but-non-UTF-8 value fails loudly rather
+    // than being silently ignored in favor of the SQF address.
+    let env_override = match std::env::var(LISTEN_ADDR_ENV) {
+        Ok(value) => Some(value),
+        Err(VarError::NotPresent) => None,
+        Err(VarError::NotUnicode(_)) => {
+            return Err(format!("{LISTEN_ADDR_ENV} is not valid UTF-8"));
+        }
+    };
+    let addr = resolve_listen_addr(&sqf_addr, env_override.as_deref());
     let socket_addr: SocketAddr = addr
         .parse()
         .map_err(|err| format!("invalid address {addr:?}: {err}"))?;
@@ -98,6 +125,7 @@ fn cmd_start(ctx: Context, addr: String) -> Result<String, String> {
     };
     let handle = ServerHandle::spawn(config, sink).map_err(|err| err.to_string())?;
     let bound = handle.local_addr().to_string();
+    tracing::info!(%sqf_addr, %addr, %bound, "minerva: server started");
     *guard = Some(handle);
     Ok(bound)
 }
@@ -257,4 +285,33 @@ fn cmd_command_ack(
             .dispatcher()
             .complete(CommandId::from(command_id), outcome))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_listen_addr;
+
+    #[test]
+    fn sqf_address_is_used_without_override() {
+        assert_eq!(
+            resolve_listen_addr("127.0.0.1:50051", None),
+            "127.0.0.1:50051"
+        );
+    }
+
+    #[test]
+    fn env_override_wins_over_sqf_address() {
+        assert_eq!(
+            resolve_listen_addr("127.0.0.1:50051", Some("0.0.0.0:6000")),
+            "0.0.0.0:6000"
+        );
+    }
+
+    #[test]
+    fn empty_env_override_counts_as_unset() {
+        assert_eq!(
+            resolve_listen_addr("127.0.0.1:50051", Some("")),
+            "127.0.0.1:50051"
+        );
+    }
 }
