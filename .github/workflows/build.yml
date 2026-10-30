@@ -6,6 +6,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Pinned so a HEMTT release can't break CI unannounced; Renovate bumps it
+  # (customManagers:githubActionsVersions in renovate.json).
+  # renovate: datasource=github-releases depName=BrettMayson/HEMTT
+  HEMTT_VERSION: v1.23.1
 
 jobs:
   build-extension-windows-x64:
@@ -133,7 +137,7 @@ jobs:
 
       - name: Install HEMTT
         run: |
-          curl -fsSL https://github.com/BrettMayson/HEMTT/releases/latest/download/linux-x64.zip -o "$RUNNER_TEMP/hemtt.zip"
+          curl -fsSL "https://github.com/BrettMayson/HEMTT/releases/download/${HEMTT_VERSION}/linux-x64.zip" -o "$RUNNER_TEMP/hemtt.zip"
           unzip -q "$RUNNER_TEMP/hemtt.zip" -d "$RUNNER_TEMP/hemtt"
           chmod +x "$RUNNER_TEMP/hemtt/hemtt"
           echo "$RUNNER_TEMP/hemtt" >> "$GITHUB_PATH"
