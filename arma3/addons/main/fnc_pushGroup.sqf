@@ -7,6 +7,9 @@
 
     IDs are `[x] call BIS_fnc_netId`, stable across save/load and correct
     in both SP and MP (unlike the native `netId` command).
+
+    Returns the "group:upsert" call's result, which is nil if the call failed
+    (fnc_call has already logged why); fnc_schedulePush counts those.
 */
 params ["_group"];
 

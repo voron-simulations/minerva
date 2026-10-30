@@ -31,7 +31,7 @@ real client end to end.
 ## Checklist
 
 - Arma's `.rpt` log (`%localappdata%\Arma 3\<profile>.rpt`, or the profile's own folder)
-  has no `Failed to invoke function` for anything under `minerva`.
+  has no `[minerva] call '...' failed` lines (see `adapter.md` for the log lines).
 - SunTzu's map shows groups and units scaled to the VR world's actual size, north up.
 - **Staggering**: with ~50 groups in the mission, pushes should be spread across roughly a
   second, not all landing in the same instant. A temporary `diag_log` in

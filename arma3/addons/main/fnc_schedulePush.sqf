@@ -23,7 +23,18 @@ GVAR(dirtyGroups) = [];
 
 if (GVAR(cycleCursor) >= count GVAR(cycle)) then {
     if (isNil QGVAR(cycleStart) || {diag_tickTime - GVAR(cycleStart) >= TICK}) then {
-        GVAR(cycle) = allGroups select {
+        // The cycle that just finished is reported here, before its counter
+        // is reset. Only a change is logged: a push that fails every cycle
+        // would otherwise repeat the same line once per TICK. fnc_call has
+        // already logged each failure's cause.
+        if (GVAR(cycleFailures) > 0 && {GVAR(cycleFailures) != GVAR(lastCycleFailures)}) then {
+            diag_log format ["[minerva] push cycle: %1 group pushes failed", GVAR(cycleFailures)];
+        };
+        GVAR(lastCycleFailures) = GVAR(cycleFailures);
+        GVAR(cycleFailures) = 0;
+
+        private _allGroups = allGroups;
+        GVAR(cycle) = _allGroups select {
             // sideLogic groups (modules, headless clients) have no
             // protocol side; publishing them only produces rejected group
             // upserts and orphaned units.
@@ -31,6 +42,12 @@ if (GVAR(cycleCursor) >= count GVAR(cycle)) then {
         };
         GVAR(cycleCursor) = 0;
         GVAR(cycleStart) = diag_tickTime;
+        // A cycle with far fewer groups than the mission has (or none) is
+        // the first thing to rule out when groups never show up server-side.
+        if (count GVAR(cycle) != GVAR(lastLoggedCycleCount)) then {
+            GVAR(lastLoggedCycleCount) = count GVAR(cycle);
+            diag_log format ["[minerva] push cycle: %1 groups (of %2 total)", count GVAR(cycle), count _allGroups];
+        };
         ["sim:state", [date, accTime, overcast, wind]] call FUNC(call);
     };
 };
@@ -42,7 +59,12 @@ if (GVAR(cycleCursor) < _cycleCount) then {
     while {GVAR(cycleCursor) < _due} do {
         private _group = GVAR(cycle) select GVAR(cycleCursor);
         if !(isNull _group) then {
-            [_group] call FUNC(pushGroup);
+            // pushGroup returns nil when its group:upsert failed. Only the
+            // cycle's own pushes are counted, not the out-of-band dirty
+            // ones, so the count is comparable to the cycle's group count.
+            if (isNil {[_group] call FUNC(pushGroup)}) then {
+                GVAR(cycleFailures) = GVAR(cycleFailures) + 1;
+            };
         };
         GVAR(cycleCursor) = GVAR(cycleCursor) + 1;
     };

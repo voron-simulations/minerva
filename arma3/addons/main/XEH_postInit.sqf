@@ -14,6 +14,12 @@ if (isNil QGVAR(factions)) then {
 // this cycle, and where in it the cursor is.
 GVAR(cycle) = [];
 GVAR(cycleCursor) = 0;
+// Diagnostics state: failed pushes in the current cycle and in the one
+// before it, and the group count last logged (-1 so the first cycle always
+// logs one).
+GVAR(cycleFailures) = 0;
+GVAR(lastCycleFailures) = 0;
+GVAR(lastLoggedCycleCount) = -1;
 // Groups fnc_requestGroupPush has marked for an out-of-band push on the
 // very next frame.
 GVAR(dirtyGroups) = [];
@@ -28,6 +34,12 @@ if (!isNil "_listening") then {
 };
 ["reset"] call FUNC(call);
 ["sim:info", [worldName, [worldSize, worldSize], GVAR(factions), date]] call FUNC(call);
+// Groups may not exist yet at postInit, so a low count here isn't an error;
+// fnc_schedulePush logs the count it actually pushes.
+diag_log format [
+    "[minerva] init: world %1, size %2, sided groups: %3",
+    worldName, worldSize, count (allGroups select {(side _x) in [west, east, independent, civilian]})
+];
 
 addMissionEventHandler ["ExtensionCallback", FUNC(onCallback)];
 

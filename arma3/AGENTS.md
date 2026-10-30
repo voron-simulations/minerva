@@ -96,6 +96,13 @@ changes are picked up with no version bump.
   `callback_handler`'s case, blocking) methods directly in the current task instead; see
   `tests/extension.rs`'s `send_command_acked_via_callback_and_ack` for the pattern (spawn
   only the tonic client call, block the current task on `callback_handler`).
+- SQF-side diagnostics use `diag_log` with a `[minerva]` prefix, not `BIS_fnc_error`: a Linux
+  dedicated server has no `.rpt`, and `BIS_fnc_error`'s output isn't reliably in its console,
+  which once left a failing push entirely silent. `fnc_call.sqf` logs every failed call and
+  returns `nil`, so a caller that needs to know checks `isNil` on the result
+  (`fnc_pushGroup.sqf` returns it as is; `fnc_schedulePush.sqf` counts the nils per cycle).
+  Keep new log lines quiet in the steady state (log changes, not every frame) and list them
+  in `../docs/adapter.md`'s Logging section.
 
 ## Docs
 
