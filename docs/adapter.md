@@ -13,7 +13,29 @@ what's specific to the Arma 3 adapter (`arma3/`) -- a client should not assume a
   this is how a service manager (e.g. a systemd unit) configures it. An empty value counts as
   unset; a non-empty but unparsable value makes `start` fail rather than fall back to SQF's
   address. `start` returns the address actually bound, so `:0` reports the real port, and the
-  addon writes `[minerva] gRPC listening on <addr>` to the `.rpt` log once it has started.
+  addon logs `[minerva] gRPC listening on <addr>` once it has started (see Logging).
+
+## Logging
+
+The addon writes every line with `diag_log`, prefixed `[minerva]`: to the `.rpt` file where
+there is one, otherwise to the server console (journald for a Linux dedicated server under
+systemd; `journalctl -u <unit> | grep '\[minerva\]'`). It stays quiet while things work:
+
+| Line | When |
+| --- | --- |
+| `[minerva] gRPC listening on <addr>` | Once, after `start` succeeded. |
+| `[minerva] init: world <worldName>, size <worldSize>, sided groups: <n>` | Once, at `postInit` after `sim:info`. Groups spawned later aren't counted, so a low `<n>` here is not an error. |
+| `[minerva] push cycle: <n> groups (of <total> total)` | When a push cycle's group count differs from the last one logged, and always for the first cycle. `<n>` is the west/east/independent/civilian groups that get pushed; `<total>` is every group, including logic groups (modules, headless clients). `0` means nothing is pushed. |
+| `[minerva] push cycle: <n> group pushes failed` | After a cycle in which `<n>` (non-zero) `group:upsert` calls failed, only if `<n>` differs from the previous cycle's count. Nothing is logged for a clean cycle, so recovery is silent. Pushes made out of band after a kill aren't counted. |
+| `[minerva] call '<function>' failed: errcode <e> (<name>), retcode <r>, result: <text>, args: <args>` | Every failed extension call, the cause behind the failure count above. `<args>` is the call's arguments as SQF serialized them (`str`), cut off at 400 characters. Not throttled: a call that always fails logs once per attempt, i.e. up to once per group per second for `group:upsert`. |
+
+`<e>` is the engine's error code: `101` (`SYNTAX_ERROR_WRONG_PARAMS_SIZE`), `102`
+(`SYNTAX_ERROR_WRONG_PARAMS_TYPE`) and `201` (`PARAMS_ERROR_TOO_MANY_ARGS`) are named, any
+other non-zero code is shown as `unmapped`, and `301` is not treated as a failure. `<r>` is the
+extension's return code (from `arma-rs`): `1` unknown command, `2N` wrong number of arguments
+(`N` were sent), `3N` argument number `N+1` couldn't be parsed, `9` the command returned an
+error, in which case `<text>` is its message (e.g. `minerva: not started`, `unknown side: LOGIC`).
+A failed call returns `nil` to SQF.
 
 ## Coordinates and time
 
@@ -29,8 +51,8 @@ what's specific to the Arma 3 adapter (`arma3/`) -- a client should not assume a
 - `ammo_state` is always `1`: there's no generic "ammo fraction" command for a mixed
   group, so no ammo model exists yet.
 - `fuel_state` averages `fuel` over tracked vehicles (`1` if there are none) and
-  `health_state` averages `1 - damage` over every tracked unit; a wrecked vehicle with an
-  unhurt crew pulls the group's health down, not just its fuel.
+  `health_state` averages `1 - damage` over every tracked unit (`1` if there are none); a
+  wrecked vehicle with an unhurt crew pulls the group's health down, not just its fuel.
 - `UnitState.loadout` is never populated.
 
 ## Commands

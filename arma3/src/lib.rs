@@ -205,6 +205,21 @@ fn cmd_sim_state(
     })
 }
 
+/// Rejects the ids a nil or null source produces. SQF stringifies nil as
+/// `any` and a null object's `netId` is empty, and neither is a real id.
+/// Release builds of `arma-rs` already refuse an unquoted `any` while parsing
+/// a `String`, but debug builds accept it (and either build accepts a quoted
+/// one), so without this check a SQF bug that leaves an id nil is only
+/// caught in release builds, with an opaque return code instead of a message.
+fn validate_id(kind: &str, id: String) -> Result<String, String> {
+    if id.is_empty() || id == "any" {
+        return Err(format!(
+            "invalid {kind} id {id:?}: nil or empty, check how SQF obtained it (BIS_fnc_netId)"
+        ));
+    }
+    Ok(id)
+}
+
 /// A `group:upsert` unit arg: `(id, kind, type, posASL, dir, velocity,
 /// damage)`. No `group_id` -- the server fills that in from the containing
 /// group's own id.
@@ -220,6 +235,7 @@ fn cmd_group_upsert(
     waypoints: Vec<(String, [f64; 3])>,
     units: Vec<GroupUpsertUnit>,
 ) -> Result<(), String> {
+    let id = validate_id("group", id)?;
     let side = convert::side_from_str(&side)?;
     let waypoints = waypoints
         .into_iter()
@@ -232,10 +248,13 @@ fn cmd_group_upsert(
         .into_iter()
         .map(
             |(unit_id, kind, unit_type, pos_asl, dir, velocity, damage)| {
-                convert::unit_from_parts(unit_id, &kind, unit_type, pos_asl, dir, velocity, damage)
+                let unit_id = validate_id("unit", unit_id)?;
+                Ok(convert::unit_from_parts(
+                    unit_id, &kind, unit_type, pos_asl, dir, velocity, damage,
+                ))
             },
         )
-        .collect();
+        .collect::<Result<Vec<_>, String>>()?;
     with_server(&ctx, |handle| {
         handle.state().upsert_group_with_units(
             proto::Group {
@@ -257,12 +276,14 @@ fn cmd_group_upsert(
 }
 
 fn cmd_group_remove(ctx: Context, id: String) -> Result<bool, String> {
+    let id = validate_id("group", id)?;
     with_server(&ctx, |handle| {
         Ok(handle.state().remove_group(&GroupId::from(id)).is_some())
     })
 }
 
 fn cmd_unit_remove(ctx: Context, id: String) -> Result<bool, String> {
+    let id = validate_id("unit", id)?;
     with_server(&ctx, |handle| {
         Ok(handle.state().remove_unit(&UnitId::from(id)).is_some())
     })
@@ -288,7 +309,25 @@ fn cmd_command_ack(
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_listen_addr;
+    use super::{resolve_listen_addr, validate_id};
+
+    #[test]
+    fn validate_id_accepts_a_netid() {
+        assert_eq!(
+            validate_id("group", "2:5".to_string()),
+            Ok("2:5".to_string())
+        );
+    }
+
+    #[test]
+    fn validate_id_rejects_empty_and_nil() {
+        for bad in ["", "any"] {
+            match validate_id("unit", bad.to_string()) {
+                Err(err) => assert!(err.contains("invalid unit id"), "{err}"),
+                Ok(id) => panic!("{id:?} must be rejected"),
+            }
+        }
+    }
 
     #[test]
     fn sqf_address_is_used_without_override() {
