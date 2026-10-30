@@ -27,7 +27,7 @@ systemd; `journalctl -u <unit> | grep '\[minerva\]'`). It stays quiet while thin
 | `[minerva] init: world <worldName>, size <worldSize>, sided groups: <n>` | Once, at `postInit` after `sim:info`. Groups spawned later aren't counted, so a low `<n>` here is not an error. |
 | `[minerva] push cycle: <n> groups (of <total> total)` | When a push cycle's group count differs from the last one logged, and always for the first cycle. `<n>` is the west/east/independent/civilian groups that get pushed; `<total>` is every group, including logic groups (modules, headless clients). `0` means nothing is pushed. |
 | `[minerva] push cycle: <n> group pushes failed` | After a cycle in which `<n>` (non-zero) `group:upsert` calls failed, only if `<n>` differs from the previous cycle's count. Nothing is logged for a clean cycle, so recovery is silent. Pushes made out of band after a kill aren't counted. |
-| `[minerva] call '<function>' failed: errcode <e> (<name>), retcode <r>, result: <text>` | Every failed extension call, the cause behind the failure count above. Not throttled: a call that always fails logs once per attempt, i.e. up to once per group per second for `group:upsert`. |
+| `[minerva] call '<function>' failed: errcode <e> (<name>), retcode <r>, result: <text>, args: <args>` | Every failed extension call, the cause behind the failure count above. `<args>` is the call's arguments as SQF serialized them (`str`), cut off at 400 characters. Not throttled: a call that always fails logs once per attempt, i.e. up to once per group per second for `group:upsert`. |
 
 `<e>` is the engine's error code: `101` (`SYNTAX_ERROR_WRONG_PARAMS_SIZE`), `102`
 (`SYNTAX_ERROR_WRONG_PARAMS_TYPE`) and `201` (`PARAMS_ERROR_TOO_MANY_ARGS`) are named, any

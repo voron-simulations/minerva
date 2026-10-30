@@ -24,9 +24,15 @@ if (_failed) exitWith {
         case 201: {"PARAMS_ERROR_TOO_MANY_ARGS"};
         default {"unmapped"};
     };
+    // The arguments as SQF serialized them, since a parse failure (retcode
+    // 3N) can only be diagnosed by seeing what the extension was handed. They
+    // are capped so one large group:upsert can't flood the log; the explicit
+    // min avoids relying on select clamping a length past the string's end.
+    private _argsText = str _args;
+    _argsText = _argsText select [0, 400 min count _argsText];
     diag_log format [
-        "[minerva] call '%1' failed: errcode %2 (%3), retcode %4, result: %5",
-        _function, _errcode, _errName, _retcode, _result
+        "[minerva] call '%1' failed: errcode %2 (%3), retcode %4, result: %5, args: %6",
+        _function, _errcode, _errName, _retcode, _result, _argsText
     ];
     // On failure _result is error text, not a value; callers get nil rather
     // than something they could mistake for a result.
