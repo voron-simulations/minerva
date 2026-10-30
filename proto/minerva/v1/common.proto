@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package minerva.v1;
+
+option csharp_namespace = "Minerva.Protocol";
+
+// Side (faction affiliation) of a unit, group or location.
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BLUFOR = 1;
+  SIDE_OPFOR = 2;
+  SIDE_INDEPENDENT = 3;
+  SIDE_CIVILIAN = 4;
+}
+
+// Position in meters, relative to the map origin. z is altitude above sea
+// level (ASL), not above ground level.
+message Position {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Orientation {
+  // Compass heading in degrees: 0 is north, increasing clockwise.
+  float direction = 1;
+  float pitch = 2;
+  float roll = 3;
+}
+
+// Velocity vector in meters per second.
+message Velocity {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message Faction {
+  string name = 1;
+  Side side = 2;
+}

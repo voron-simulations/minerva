@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package minerva.v1;
+
+import "minerva/v1/common.proto";
+import "minerva/v1/weather.proto";
+
+option csharp_namespace = "Minerva.Protocol";
+
+message WorldSize {
+  double x_meters = 1;
+  double y_meters = 2;
+}
+
+message SimulationInfo {
+  string world_name = 1;
+  WorldSize world_size = 2;
+  repeated Faction factions = 3;
+
+  int64 simulation_start_sim_time = 10; // in-simulation time at scenario start (unix timestamp)
+  int64 simulation_start_real_time = 11; // real world time of simulation start (unix timestamp)
+}
+
+message SimulationStateUpdate {
+  int64 simulation_time = 1; // current in-simulation time (unix timestamp)
+  float time_acceleration = 2;
+
+  Weather weather = 10;
+}
+
+message GetSimulationInfoRequest {}
+
+message GetSimulationInfoResponse {
+  SimulationInfo info = 1;
+}
+
+message SubscribeSimulationUpdatesRequest {}
+
+message SubscribeSimulationUpdatesResponse {
+  SimulationStateUpdate state = 1;
+}
+
+service SimulationService {
+  rpc GetSimulationInfo(GetSimulationInfoRequest) returns (GetSimulationInfoResponse);
+  rpc SubscribeSimulationUpdates(SubscribeSimulationUpdatesRequest) returns (stream SubscribeSimulationUpdatesResponse);
+}

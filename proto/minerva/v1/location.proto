@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package minerva.v1;
+
+import "minerva/v1/common.proto";
+
+option csharp_namespace = "Minerva.Protocol";
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_AIRPORT = 1;
+  CAPABILITY_SEAPORT = 2;
+  CAPABILITY_FACTORY = 3;
+}
+
+message Location {
+  string id = 1;
+  string name = 2;
+  repeated Capability capabilities = 3;
+  Position position = 4;
+  map<string, double> resources = 5;
+  Side owner = 6;
+}
+
+message ListLocationsRequest {
+  optional Side side = 1;
+}
+
+message ListLocationsResponse {
+  repeated Location locations = 1;
+}
+
+service LocationService {
+  rpc ListLocations(ListLocationsRequest) returns (ListLocationsResponse);
+}

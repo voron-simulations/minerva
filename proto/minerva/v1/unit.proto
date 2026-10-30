@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package minerva.v1;
+
+import "minerva/v1/common.proto";
+import "minerva/v1/loadout.proto";
+
+option csharp_namespace = "Minerva.Protocol";
+
+enum UnitCategory {
+  UNIT_CATEGORY_UNSPECIFIED = 0;
+  UNIT_CATEGORY_INFANTRY = 1;
+  UNIT_CATEGORY_VEHICLE = 2;
+  UNIT_CATEGORY_PLANE = 3;
+  UNIT_CATEGORY_HELICOPTER = 4;
+}
+
+message HealthState {
+  // 1 for undamaged, 0 for destroyed.
+  float health = 1;
+  // e.g. "fuel leak", "engine damage"
+  repeated string damage_effects = 2;
+}
+
+message UnitState {
+  Position position = 1;
+  Orientation orientation = 2;
+  Velocity velocity = 3;
+  HealthState health = 10;
+  LoadoutState loadout = 11;
+}
+
+message Unit {
+  string id = 1;
+  // Id of the group this unit belongs to.
+  string group_id = 2;
+  UnitCategory category = 3;
+  string type = 4;
+  optional UnitState state = 5;
+}
+
+message GetUnitRequest {
+  string id = 1;
+}
+
+message GetUnitResponse {
+  Unit unit = 1;
+}
+
+message ListUnitsRequest {
+  optional Side side = 1;
+  optional string group_id = 2;
+}
+
+message ListUnitsResponse {
+  repeated Unit units = 1;
+}
+
+service UnitService {
+  rpc GetUnit(GetUnitRequest) returns (GetUnitResponse);
+  rpc ListUnits(ListUnitsRequest) returns (ListUnitsResponse);
+}

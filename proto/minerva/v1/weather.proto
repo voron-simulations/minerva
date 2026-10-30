@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package minerva.v1;
+
+option csharp_namespace = "Minerva.Protocol";
+
+message Weather {
+  // 0 for clear skies, 1 for completely overcast.
+  float overcast = 1;
+  // Wind speed in meters per second, as reported by the simulation.
+  float wind_speed = 2;
+  // Wind direction in radians, measured counterclockwise from east, as
+  // reported by the simulation.
+  float wind_direction = 3;
+}

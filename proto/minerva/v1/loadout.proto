@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package minerva.v1;
+
+option csharp_namespace = "Minerva.Protocol";
+
+message Weapon {}
+
+message LoadoutState {
+  repeated Weapon weapon = 1;
+}
