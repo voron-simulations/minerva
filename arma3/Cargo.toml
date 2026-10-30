@@ -1,0 +1,38 @@
+[workspace]
+members = ["."]
+
+[workspace.dependencies]
+anyhow = "1"
+arma-rs = "1.13"
+criterion = "0.8"
+minerva-server = { git = "https://github.com/voron-simulations/minerva-server", rev = "93a2966091522eb477f83cfda9a4b67410553dea" }
+tokio = "1"
+tokio-stream = "0.1"
+tonic = "0.14"
+tracing = "0.1"
+
+[package]
+name = "minerva-arma3"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+bench = false
+crate-type = ["cdylib", "rlib"]
+name = "minerva"
+
+[dependencies]
+anyhow = { workspace = true }
+arma-rs = { workspace = true }
+minerva-server = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "time"] }
+tokio-stream = { workspace = true }
+tonic = { workspace = true, features = ["transport"] }
+criterion = { workspace = true }
+
+[[bench]]
+name = "extension"
+harness = false
