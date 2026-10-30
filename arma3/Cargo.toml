@@ -5,6 +5,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
+# A panic inside the extension takes the whole Arma process down with it, so
+# fallible paths must return errors to SQF instead.
+[lints.clippy]
+expect_used = "deny"
+unwrap_used = "deny"
+
 [lib]
 bench = false
 crate-type = ["cdylib", "rlib"]

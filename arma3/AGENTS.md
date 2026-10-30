@@ -80,6 +80,8 @@ changes are picked up with no version bump.
 
 ## Gotchas
 
+- `unwrap`/`expect` are denied by clippy lints in `Cargo.toml`: a panic in the extension kills the
+  Arma process, so return an `Err` to SQF instead. Tests use small `expect` helper functions.
 - Tests that call `start` read `MINERVA_LISTEN_ADDR` from the environment; unset it in your
   shell if you export it for a local dedicated server, or those tests will bind it.
 - `arma_rs::testing::Extension::call` args are the same strings a real `callExtension`
