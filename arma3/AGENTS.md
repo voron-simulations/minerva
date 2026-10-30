@@ -1,7 +1,8 @@
 # AGENTS.md
 
-Thin arma-rs + SQF wrapper around [`minerva-server`](https://github.com/voron-simulations/minerva-server):
-pushes Arma state into its `StateCache` and executes commands it dispatches back.
+Thin arma-rs + SQF wrapper around [`minerva-server`](../server): pushes Arma state into its
+`StateCache` and executes commands it dispatches back. File paths are relative to this
+directory; `cargo` commands run from the repo root, `hemtt` from here.
 
 ## Layout
 
@@ -45,36 +46,42 @@ reported it immediately). A crewed vehicle's whole crew maps to one `VEHICLE`/`H
 `EntityKilled` handler re-derives a killed crew member's vehicle's owner and dirties that
 group too, since a kill can hand the vehicle to another group's surviving crew.
 
+## Configuration
+
+`start`'s address comes from SQF (`GVAR(listenAddress)`, default `127.0.0.1:50051`) unless
+the `MINERVA_LISTEN_ADDR` environment variable is set and non-empty, which overrides it. A
+dedicated server has no mission hook to set the SQF variable, so its systemd unit sets the
+env var instead. `resolve_listen_addr` in `src/lib.rs` holds the rule; see
+`../docs/adapter.md` for the user-facing description.
+
 ## The `minerva-server` dependency
 
-Consumed as a `git` dependency (`Cargo.toml`) pinned to a `main` commit `rev` (it has no
-tags yet); bump the `rev` to pick up server changes.
-
-For local development against a working copy, create a gitignored `.cargo/config.toml`:
-
-```toml
-[patch."https://github.com/voron-simulations/minerva-server"]
-minerva-server = { path = "../minerva-server" }
-```
-
-(assumes `minerva-server` is checked out as a sibling directory of this repo).
+A path dependency on `../server` through the root `[workspace.dependencies]`, so server
+changes are picked up with no version bump.
 
 ## Testing
 
-- `cargo test` — unit tests (`src/convert.rs`) plus `tests/extension.rs`, which drives the
-  extension through `arma_rs`'s `testing::Extension` (i.e. exactly the string-marshalled
-  calls SQF would make) and, for the gRPC-facing tests, a real tonic client against the
-  server `start` actually binds.
-- `cargo bench` — `benches/extension.rs`, the full `group:upsert` call path (marshalling +
-  `StateCache` write) for a 12-man-squad-plus-vehicle group, since that's the largest
+- `cargo test -p minerva-arma3` — unit tests (`src/lib.rs`, `src/convert.rs`) plus
+  `tests/extension.rs`, which drives the extension through `arma_rs`'s `testing::Extension`
+  (i.e. exactly the string-marshalled calls SQF would make) and, for the gRPC-facing tests,
+  a real tonic client against the server `start` actually binds. `tests/listen_addr_env.rs`
+  is a separate binary with a single test because it sets `MINERVA_LISTEN_ADDR`
+  process-wide.
+- `cargo bench -p minerva-arma3` — `benches/extension.rs`, the full `group:upsert` call path
+  (marshalling + `StateCache` write) for a 12-man-squad-plus-vehicle group, since that's the largest
   single call `fnc_pushGroup.sqf` makes, once per group per its turn in the push cycle.
-- `cargo llvm-cov` — coverage (CI posts a summary to the job summary).
-- `hemtt check` — lints the SQF (`.hemtt/lints.toml`) and rapifies the addon config; run
-  before opening a PR, since CI's `hemtt release` build would otherwise be the first
-  place a lint or config error surfaces.
+- `cargo llvm-cov` — coverage, workspace-wide (CI posts a summary to the job summary).
+- `hemtt check` (from this directory) — lints the SQF (`.hemtt/lints.toml`) and rapifies the
+  addon config; run before opening a PR.
+- `hemtt release` (from this directory) — builds `releases/minerva-latest.zip` with an
+  `@minerva` top-level folder. It bundles `minerva_x64.dll`/`.so` if they sit in this
+  directory (CI copies the release builds there; locally `cp ../target/release/libminerva.so
+  minerva_x64.so`) and silently skips a missing one. Both files are gitignored.
 
 ## Gotchas
 
+- Tests that call `start` read `MINERVA_LISTEN_ADDR` from the environment; unset it in your
+  shell if you export it for a local dedicated server, or those tests will bind it.
 - `arma_rs::testing::Extension::call` args are the same strings a real `callExtension`
   call would send: string arguments must be quoted (`"\"g1\""`, not `"g1"`), everything
   else (numbers, arrays, bools) doesn't need to be.
@@ -89,8 +96,8 @@ minerva-server = { path = "../minerva-server" }
 
 ## Docs
 
-- `docs/adapter.md` — this adapter's specific behavior within the protocol contract
-  (`minerva-protocol`'s `docs/contract.md`): what it reports for fields the contract
-  leaves up to the server, and which commands it doesn't implement yet.
-- `docs/in-game-testing.md` — runbook for an actual in-game smoke test against a real
+- `../docs/adapter.md` — this adapter's specific behavior within the protocol contract
+  (`../docs/contract.md`): configuration, what it reports for fields the contract leaves up
+  to the server, and which commands it doesn't implement yet.
+- `../docs/in-game-testing.md` — runbook for an actual in-game smoke test against a real
   Arma 3 client.

@@ -1,9 +1,18 @@
 # minerva-arma3 adapter behavior
 
-[`minerva-protocol`'s `docs/contract.md`](https://github.com/voron-simulations/minerva-protocol/blob/main/docs/contract.md)
-defines what any client may rely on. This document covers only what's specific to this
-adapter -- an Arma 3 client should not assume another `minerva-server` engine plugin
-behaves the same way on any of these points.
+[`contract.md`](contract.md) defines what any client may rely on. This document covers only
+what's specific to the Arma 3 adapter (`arma3/`) -- a client should not assume another
+`minerva-server` engine plugin behaves the same way on any of these points.
+
+## Configuration
+
+- The gRPC listen address defaults to `127.0.0.1:50051`. SQF can change it by setting
+  `GVAR(listenAddress)` before `postInit` runs (`addons/main/XEH_postInit.sqf`).
+- The `MINERVA_LISTEN_ADDR` environment variable of the Arma process overrides whatever SQF
+  passes to `start`. A dedicated server has no mission hook to set `GVAR(listenAddress)`, so
+  this is how a service manager (e.g. a systemd unit) configures it. An empty value counts as
+  unset; a non-empty but unparsable value makes `start` fail rather than fall back to SQF's
+  address. `start` returns the address actually bound, so `:0` reports the real port.
 
 ## Coordinates and time
 

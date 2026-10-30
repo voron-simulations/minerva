@@ -1,4 +1,13 @@
+root = true
+
 [*]
-insert_spaces=true
-indent_size=2
-trim_trailing_whitespace=true
+trim_trailing_whitespace = true
+
+[*.{proto,yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+# rustfmt's default; the arma3 SQF files mix tabs and spaces, so they are left alone.
+[*.{rs,py}]
+indent_style = space
+indent_size = 4

@@ -1,6 +1,6 @@
 # Minerva v1 contract
 
-The protobuf definitions in [`minerva/v1`](../minerva/v1) are the wire contract.
+The protobuf definitions in [`proto/minerva/v1`](../proto/minerva/v1) are the wire contract.
 This document records what any client and any server implementation may rely
 on where a field or stream message alone does not convey it. It says nothing
 about a specific adapter (e.g. Arma 3) — see that adapter's own docs for its

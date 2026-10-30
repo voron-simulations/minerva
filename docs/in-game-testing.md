@@ -8,16 +8,16 @@ real client end to end.
 ## Setup
 
 1. **Get the mod.** Download the `addon` artifact from a CI run of this branch (or
-   `main`, once merged) on GitHub Actions -- built by `reusable-build.yml`'s "Build addon"
-   job via `hemtt release`. Do not use the nightly release; it predates the
-   `minerva-server` rebuild (#130/#131) and won't have `group:upsert`'s units arg. Unzip
-   it; it contains an `@minerva` folder.
+   `main`, once merged) on GitHub Actions -- built by `.github/workflows/build.yml`'s "Build
+   addon" job via `hemtt release`. Do not use a nightly release that predates the
+   `minerva-server` rebuild (minerva-arma3 PRs #130/#131, from before the monorepo): it won't
+   have `group:upsert`'s units arg. Unzip it; it contains an `@minerva` folder.
 2. **Install it.** Copy `@minerva` into your Arma 3 install directory (next to `@cba_a3`,
    which you also need -- <https://steamcommunity.com/sharedfiles/filedetails/?id=450814997>).
    The extension is unsigned, so **BattlEye must be disabled** for this profile/launch
    (`-noBattlEye`, or disable it in the launcher) -- otherwise the game silently refuses to
    load `minerva_x64.dll`.
-3. **Copy the test mission.** Copy `.hemtt/missions/minerva_test.VR/` into your Arma 3
+3. **Copy the test mission.** Copy `arma3/.hemtt/missions/minerva_test.VR/` into your Arma 3
    profile's `missions/` folder (typically
    `Documents/Arma 3/missions/minerva_test.VR/`). It spawns one infantry squad per side
    plus a crewed tank, and enough extra BLUFOR squads to bring the mission to ~50 groups
