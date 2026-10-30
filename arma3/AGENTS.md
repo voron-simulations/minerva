@@ -70,7 +70,8 @@ changes are picked up with no version bump.
 - `cargo bench -p minerva-arma3` — `benches/extension.rs`, the full `group:upsert` call path
   (marshalling + `StateCache` write) for a 12-man-squad-plus-vehicle group, since that's the largest
   single call `fnc_pushGroup.sqf` makes, once per group per its turn in the push cycle.
-- `cargo llvm-cov` — coverage, workspace-wide (CI posts a summary to the job summary).
+- `cargo llvm-cov --workspace --all-features --ignore-filename-regex 'server/src/gen/'` —
+  coverage with the same flags as CI, which posts a summary to the job summary.
 - `hemtt check` (from this directory) — lints the SQF (`.hemtt/lints.toml`) and rapifies the
   addon config; run before opening a PR.
 - `hemtt release` (from this directory) — builds `releases/minerva-latest.zip` with an

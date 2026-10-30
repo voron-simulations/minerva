@@ -11,7 +11,7 @@ fit and how to add an engine: `docs/architecture.md`.
 - `arma3/` — Rust crate `minerva-arma3` (cdylib `minerva`) plus the HEMTT Arma addon. See `arma3/AGENTS.md`.
 - `docs/` — `contract.md` (protocol), `adapter.md` and `in-game-testing.md` (Arma 3), `architecture.md`.
 - `adr/` — architecture decision records.
-- `.github/workflows/` — `proto.yml` (buf lint/breaking/BSR push), `ci.yml` (Rust, generated-code and addon checks), `build.yml` (reusable addon build), `nightly.yml`. No job is path-filtered: every PR runs everything.
+- `.github/workflows/` — `proto.yml` (buf lint/breaking/BSR push), `ci.yml` (Rust, generated-code and addon checks), `build.yml` (reusable addon build), `nightly.yml`. `ci.yml` skips PRs that only touch Markdown or top-level dotfiles; any other PR runs every job.
 
 ## Build and test
 
@@ -22,6 +22,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo bench --workspace --no-run
+cargo llvm-cov --workspace --all-features --ignore-filename-regex 'server/src/gen/'   # coverage, as in CI
 cargo build --release   # target/release/libminerva.so (minerva.dll on Windows)
 ```
 

@@ -38,8 +38,9 @@ Merge the three repositories into one, `voron-simulations/minerva`, with history
   they build and pass tests together.
 - The breaking-change check (`buf breaking`) still guards the published contract, but a
   breaking change no longer needs coordinated bumps across repositories.
-- Every pull request runs the CI for all parts. The cost is accepted for now; per-path job
-  filtering can be added if CI time becomes a problem.
+- Apart from docs-only PRs, which skip `ci.yml`, every pull request runs the CI for all
+  parts. The cost is accepted for now; per-path job filtering can be added if CI time
+  becomes a problem.
 - Adapters share the server's release cadence. The crates are not published independently;
   that decision is deferred until an external consumer needs it.
 - External consumers of the BSR module are unaffected. The old repositories become
