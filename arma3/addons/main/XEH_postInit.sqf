@@ -46,7 +46,7 @@ addMissionEventHandler ["ExtensionCallback", FUNC(onCallback)];
 addMissionEventHandler ["EntityKilled", {
     params ["_unit"];
     if (_unit isKindOf "Man" || {_unit isKindOf "AllVehicles"}) then {
-        ["unit:remove", [[_unit] call BIS_fnc_netId]] call FUNC(call);
+        ["unit:remove", [_unit call BIS_fnc_netId]] call FUNC(call);
         // Readiness (health/fuel averages) and membership shouldn't wait
         // up to TICK seconds to reflect a kill.
         [group _unit] call FUNC(requestGroupPush);
@@ -65,13 +65,13 @@ addMissionEventHandler ["EntityKilled", {
 addMissionEventHandler ["EntityDeleted", {
     params ["_entity"];
     if (_entity isKindOf "Man" || {_entity isKindOf "AllVehicles"}) then {
-        ["unit:remove", [[_entity] call BIS_fnc_netId]] call FUNC(call);
+        ["unit:remove", [_entity call BIS_fnc_netId]] call FUNC(call);
     };
 }];
 
 addMissionEventHandler ["GroupDeleted", {
     params ["_group"];
-    ["group:remove", [[_group] call BIS_fnc_netId]] call FUNC(call);
+    ["group:remove", [_group call BIS_fnc_netId]] call FUNC(call);
 }];
 
 addMissionEventHandler ["Ended", {["reset"] call FUNC(call);}];

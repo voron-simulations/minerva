@@ -96,6 +96,12 @@ changes are picked up with no version bump.
   `callback_handler`'s case, blocking) methods directly in the current task instead; see
   `tests/extension.rs`'s `send_command_acked_via_callback_and_ack` for the pattern (spawn
   only the tonic client call, block the current task on `callback_handler`).
+- `arma-rs` parses a `String` argument leniently in debug builds (which `cargo test` is) and
+  strictly in release builds: an unquoted value such as the `any` SQF makes of a nil is
+  accepted by the former and fails with retcode 30 (first argument) in the latter. Never
+  trust `cargo test` alone for marshalling; `validate_id` in `src/lib.rs` rejects an empty or
+  `any` id in both. `BIS_fnc_netId` takes the object or group itself (`_unit call
+  BIS_fnc_netId`); `[_unit] call BIS_fnc_netId` returns nil, which is what that failure was.
 - SQF-side diagnostics use `diag_log` with a `[minerva]` prefix, not `BIS_fnc_error`: a Linux
   dedicated server has no `.rpt`, and `BIS_fnc_error`'s output isn't reliably in its console,
   which once left a failing push entirely silent. `fnc_call.sqf` logs every failed call and

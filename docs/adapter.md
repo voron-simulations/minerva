@@ -51,8 +51,8 @@ A failed call returns `nil` to SQF.
 - `ammo_state` is always `1`: there's no generic "ammo fraction" command for a mixed
   group, so no ammo model exists yet.
 - `fuel_state` averages `fuel` over tracked vehicles (`1` if there are none) and
-  `health_state` averages `1 - damage` over every tracked unit; a wrecked vehicle with an
-  unhurt crew pulls the group's health down, not just its fuel.
+  `health_state` averages `1 - damage` over every tracked unit (`1` if there are none); a
+  wrecked vehicle with an unhurt crew pulls the group's health down, not just its fuel.
 - `UnitState.loadout` is never populated.
 
 ## Commands

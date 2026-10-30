@@ -164,6 +164,90 @@ fn group_upsert_rejects_unknown_side() {
     assert!(result.contains("unknown side"), "{result}");
 }
 
+/// What `fnc_pushGroup.sqf` once sent for every id: `[x] call BIS_fnc_netId`
+/// returns nil, which SQF serializes as an unquoted `any`. Debug builds of
+/// `arma-rs` (which `cargo test` is) parse that as the string "any", release
+/// builds fail to parse it, so only the quoted form behaves the same in both.
+const NIL_ID: &str = "any";
+
+#[test]
+fn group_upsert_rejects_nil_and_empty_group_id() {
+    let extension = init().testing();
+    let (_, start_code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
+    assert_eq!(start_code, 0);
+    for bad in [NIL_ID, ""] {
+        let (result, code) =
+            extension.call("group:upsert", Some(group_upsert_args(bad, "WEST", "[]")));
+        assert_ne!(code, 0, "{bad:?}");
+        assert!(result.contains("invalid group id"), "{result}");
+    }
+}
+
+#[test]
+fn group_upsert_rejects_unquoted_nil_group_id() {
+    // The exact bytes SQF sent. Rejected by the id check in a debug build and
+    // by arma-rs's own parsing in a release one, so only the code is asserted.
+    let extension = init().testing();
+    let (_, start_code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
+    assert_eq!(start_code, 0);
+    let mut args = group_upsert_args("g1", "WEST", "[]");
+    args[0] = NIL_ID.to_string();
+    let (_, code) = extension.call("group:upsert", Some(args));
+    assert_ne!(code, 0);
+}
+
+#[test]
+fn group_upsert_rejects_nil_unit_id_without_adding_the_group() {
+    let extension = init().testing();
+    let (_, start_code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
+    assert_eq!(start_code, 0);
+    let units = units_literal(&[
+        unit_literal(
+            "u1",
+            "INFANTRY",
+            "B_Soldier_F",
+            [0.0; 3],
+            0.0,
+            [0.0; 3],
+            0.0,
+        ),
+        unit_literal(
+            NIL_ID,
+            "INFANTRY",
+            "B_Soldier_F",
+            [0.0; 3],
+            0.0,
+            [0.0; 3],
+            0.0,
+        ),
+    ]);
+    let (result, code) = extension.call(
+        "group:upsert",
+        Some(group_upsert_args("g1", "WEST", &units)),
+    );
+    assert_ne!(code, 0);
+    assert!(result.contains("invalid unit id"), "{result}");
+    // One good unit and a bad one: the whole call is refused, not applied up
+    // to the bad unit.
+    let (removed, code) = extension.call("group:remove", Some(vec![quoted("g1")]));
+    assert_eq!(code, 0);
+    assert_eq!(removed, "false");
+}
+
+#[test]
+fn removes_reject_nil_and_empty_ids() {
+    let extension = init().testing();
+    let (_, start_code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
+    assert_eq!(start_code, 0);
+    for (command, kind) in [("group:remove", "group"), ("unit:remove", "unit")] {
+        for bad in [NIL_ID, ""] {
+            let (result, code) = extension.call(command, Some(vec![quoted(bad)]));
+            assert_ne!(code, 0, "{command} {bad:?}");
+            assert!(result.contains(&format!("invalid {kind} id")), "{result}");
+        }
+    }
+}
+
 #[test]
 fn group_upsert_then_remove_happy_path() {
     let extension = init().testing();

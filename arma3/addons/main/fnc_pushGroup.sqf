@@ -5,8 +5,10 @@
     per push cycle by fnc_schedulePush, and immediately (out of its regular
     turn) by fnc_requestGroupPush.
 
-    IDs are `[x] call BIS_fnc_netId`, stable across save/load and correct
-    in both SP and MP (unlike the native `netId` command).
+    IDs are `x call BIS_fnc_netId`, stable across save/load and correct
+    in both SP and MP (unlike the native `netId` command). It takes the
+    object or group itself: wrapped in an array (`[x] call ...`) it returns
+    nil, and a nil id is not a usable string argument for the extension.
 
     Returns the "group:upsert" call's result, which is nil if the call failed
     (fnc_call has already logged why); fnc_schedulePush counts those.
@@ -21,7 +23,7 @@ private _fnc_avg = {
     _sum / (count _values);
 };
 
-private _groupId = [_group] call BIS_fnc_netId;
+private _groupId = _group call BIS_fnc_netId;
 
 private _waypoints = [];
 {
@@ -80,7 +82,10 @@ private _trackedUnits = [];
 // so a wrecked tank with an unhurt crew doesn't report a healthy group,
 // and a ride in another group's vehicle doesn't count as this one's fuel.
 private _fuelState = [_trackedUnits select {!(_x isKindOf "Man")} apply {fuel _x}] call _fnc_avg;
-private _healthState = 1 - ([_trackedUnits apply {damage _x}] call _fnc_avg);
+// Average damage defaults to 0 (not _fnc_avg's 1): a group with no tracked
+// units has nothing damaged, and the default 1 would report it as health 0,
+// i.e. destroyed, for a group that simply has no living members to average.
+private _healthState = 1 - ([_trackedUnits apply {damage _x}, 0] call _fnc_avg);
 
 private _units = _trackedUnits apply {
     private _unit = _x;
@@ -98,7 +103,7 @@ private _units = _trackedUnits apply {
         };
     };
     [
-        [_unit] call BIS_fnc_netId,
+        _unit call BIS_fnc_netId,
         _kind,
         typeOf _unit,
         getPosASL _unit,
