@@ -48,6 +48,8 @@ real client end to end.
   ground -- the map doesn't know terrain height), and SunTzu shows the command result as
   SUCCESS. A DefendZone command shows FAILURE with a reason (not implemented, see
   `docs/adapter.md`).
+- After that click-to-move, SunTzu shows the commanded waypoint on the group, and a group
+  nobody commanded shows none (Arma's implicit start waypoint is not reported).
 - Restart the mission preview: SunTzu's map clears and repopulates from the fresh
   simulation state, rather than showing stale groups from the previous run.
 - **Large-group check**: the crewed tank's group and the 8-man squads should all push
