@@ -347,6 +347,7 @@ async fn get_simulation_info_and_subscribe_updates() {
     let (handle, _rx) = spawn_server(Duration::from_secs(5));
     handle.state().set_simulation_info(SimulationInfo {
         world_name: "Altis".to_string(),
+        engine: "arma3".to_string(),
         ..Default::default()
     });
 
@@ -359,7 +360,9 @@ async fn get_simulation_info_and_subscribe_updates() {
             .await,
     )
     .into_inner();
-    assert_eq!(info.info.map(|i| i.world_name), Some("Altis".to_string()));
+    let info = expect_some(info.info);
+    assert_eq!(info.world_name, "Altis");
+    assert_eq!(info.engine, "arma3");
 
     handle.state().set_simulation_state(SimulationStateUpdate {
         simulation_time: 1,
