@@ -115,7 +115,8 @@ fn make_group(id: &str) -> Group {
 }
 
 /// One "tick" of every group in a mission pushing its full unit list, as
-/// `fnc_pushGroup.sqf` does once per group per `TICK` -- staggered there,
+/// `fnc_pushGroup.sqf` does for each group that changed since its last push
+/// (an idle group is only re-sent every `FULL_REFRESH`) -- staggered there,
 /// but worst-case for the cache/broadcast path is every group in the same
 /// instant, which this simulates.
 fn push_one_tick(cache: &StateCache, moved: bool) {
