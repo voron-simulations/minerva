@@ -23,6 +23,15 @@ GVAR(lastLoggedCycleCount) = -1;
 // Groups fnc_requestGroupPush has marked for an out-of-band push on the
 // very next frame.
 GVAR(dirtyGroups) = [];
+// What fnc_pushGroup last sent per group: group netId -> [payload, time].
+// Lets it skip a group:upsert whose payload hasn't changed.
+GVAR(lastPayload) = createHashMap;
+// fnc_schedulePush's push stats for the current STATS_INTERVAL window:
+// group:upsert calls made and avoided, finished cycles, and the window's start.
+GVAR(statsPushed) = 0;
+GVAR(statsSkipped) = 0;
+GVAR(statsCycles) = 0;
+GVAR(statsWindowStart) = diag_tickTime;
 
 // The extension reports the address it actually bound, which
 // MINERVA_LISTEN_ADDR can make differ from GVAR(listenAddress). Log it so an
@@ -71,7 +80,13 @@ addMissionEventHandler ["EntityDeleted", {
 
 addMissionEventHandler ["GroupDeleted", {
     params ["_group"];
-    ["group:remove", [_group call BIS_fnc_netId]] call FUNC(call);
+    private _groupId = _group call BIS_fnc_netId;
+    // Mainly so the map doesn't grow with every group ever created. It also
+    // keeps a netId handed to a later group from being compared against this
+    // group's payload, which could delay that group's first push by up to
+    // FULL_REFRESH if the two payloads happened to be identical.
+    GVAR(lastPayload) deleteAt _groupId;
+    ["group:remove", [_groupId]] call FUNC(call);
 }];
 
 addMissionEventHandler ["Ended", {["reset"] call FUNC(call);}];

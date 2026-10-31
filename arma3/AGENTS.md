@@ -20,13 +20,15 @@ directory; `cargo` commands run from the repo root, `hemtt` from here.
   `ExtensionCallback` (`context.callback_data("minerva", "command", [id, type, groupId, ...])`),
   picked up by `fnc_onCallback`/`fnc_executeCommand` on the SQF side.
 - `addons/main/` — the SQF side (CBA-macro layout, mirrors `arma3-dynops`'s `addons/main`).
-  `fnc_pushGroup.sqf` builds and sends one `group:upsert` call per group (readiness,
-  waypoints, and its full tracked-unit list together). `fnc_schedulePush.sqf` is the
-  per-frame handler that calls it: rather than pushing every group in the same frame, it
-  spreads one push cycle (every eligible group, once) evenly across `TICK` seconds, and
-  drains `fnc_requestGroupPush.sqf`'s dirty-group queue first each frame, for an
-  event-driven push that can't wait for its regular turn (currently: a kill, so readiness
-  and membership reflect it within a frame instead of up to `TICK` seconds later).
+  `fnc_pushGroup.sqf` builds one `group:upsert` payload per group (readiness,
+  waypoints, and its full tracked-unit list together) and sends it unless it is unchanged
+  since the last send (dirty-only pushes: `../docs/adapter.md`'s Push model).
+  `fnc_schedulePush.sqf` is the per-frame handler that calls it: rather than pushing every
+  group in the same frame, it spreads one push cycle (every eligible group, once) evenly
+  across `TICK` seconds, and drains `fnc_requestGroupPush.sqf`'s dirty-group queue first
+  each frame, for an event-driven push that can't wait for its regular turn (currently: a
+  kill, so readiness and membership reflect it within a frame instead of up to `TICK`
+  seconds later); those pushes pass `_force` so the unchanged check can't skip them.
 
 ## `group:upsert`'s shape
 
@@ -69,7 +71,7 @@ changes are picked up with no version bump.
   process-wide.
 - `cargo bench -p minerva-arma3` — `benches/extension.rs`, the full `group:upsert` call path
   (marshalling + `StateCache` write) for a 12-man-squad-plus-vehicle group, since that's the largest
-  single call `fnc_pushGroup.sqf` makes, once per group per its turn in the push cycle.
+  single call `fnc_pushGroup.sqf` makes, at most once per group per its turn in the push cycle.
 - `cargo llvm-cov --workspace --all-features --ignore-filename-regex 'server/src/gen/'` —
   coverage with the same flags as CI, which posts a summary to the job summary.
 - `hemtt check` (from this directory) — lints the SQF (`.hemtt/lints.toml`) and rapifies the
@@ -106,7 +108,8 @@ changes are picked up with no version bump.
   dedicated server has no `.rpt`, and `BIS_fnc_error`'s output isn't reliably in its console,
   which once left a failing push entirely silent. `fnc_call.sqf` logs every failed call and
   returns `nil`, so a caller that needs to know checks `isNil` on the result
-  (`fnc_pushGroup.sqf` returns it as is; `fnc_schedulePush.sqf` counts the nils per cycle).
+  (`fnc_pushGroup.sqf` returns it as is, or `true` when it skipped an unchanged group;
+  `fnc_schedulePush.sqf` counts the nils per cycle and logs the `true`s as skipped).
   Keep new log lines quiet in the steady state (log changes, not every frame) and list them
   in `../docs/adapter.md`'s Logging section.
 
