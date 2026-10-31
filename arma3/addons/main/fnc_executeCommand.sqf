@@ -18,10 +18,25 @@ if (isNull _group) exitWith {
     [_id, false, "unknown group"] call _fnc_ack;
 };
 
+// Index 0 is the group's implicit start waypoint, which fnc_pushGroup never
+// reports. It is left in place: if it were deleted, the first waypoint a
+// command adds would become index 0 and be hidden from every state push.
 private _fnc_clearWaypoints = {
     params ["_grp"];
-    for "_i" from (count waypoints _grp) - 1 to 0 step -1 do {
+    for "_i" from (count waypoints _grp) - 1 to 1 step -1 do {
         deleteWaypoint [_grp, _i];
+    };
+};
+
+// Called once a command has added its waypoints. The engine's current
+// waypoint may still point at the start waypoint, or at an index the clear
+// removed, so the group is pointed at the command's first waypoint (index 1)
+// explicitly instead of relying on where the engine left it. Nothing to do
+// when the command added no waypoint at all.
+private _fnc_startRoute = {
+    params ["_grp"];
+    if ((count waypoints _grp) > 1) then {
+        _grp setCurrentWaypoint [_grp, 1];
     };
 };
 
@@ -46,6 +61,7 @@ switch (_type) do {
         _target params ["_pos", "_radius"];
         [_group] call _fnc_clearWaypoints;
         (_group addWaypoint [_pos, _radius]) setWaypointType "MOVE";
+        [_group] call _fnc_startRoute;
         [_id, true] call _fnc_ack;
     };
     case "search_and_destroy": {
@@ -54,6 +70,7 @@ switch (_type) do {
         _target params ["_pos", "_radius"];
         [_group] call _fnc_clearWaypoints;
         (_group addWaypoint [_pos, _radius]) setWaypointType "SAD";
+        [_group] call _fnc_startRoute;
         [_id, true] call _fnc_ack;
     };
     case "patrol": {
@@ -77,10 +94,12 @@ switch (_type) do {
             // same waypoint and the patrol degenerates into looping on just
             // the last point. Placing it at the first point instead (with
             // the same radius, so a ground-placed first point isn't
-            // reinterpreted as ASL) makes it resolve to waypoint 0, so the
+            // reinterpreted as ASL) makes it resolve to waypoint 1, the
+            // first point (index 0 is the implicit start waypoint), so the
             // whole route repeats.
             (_group addWaypoint [_firstPos, _firstRadius]) setWaypointType "CYCLE";
         };
+        [_group] call _fnc_startRoute;
         [_id, true] call _fnc_ack;
     };
     case "defend_zone": {

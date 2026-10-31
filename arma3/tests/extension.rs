@@ -457,7 +457,7 @@ async fn group_upsert_moves_a_unit_between_groups() {
     );
 }
 
-/// Regression test for a real bug: `wind` (passed by `fnc_pushState`) is a
+/// Regression test for a real bug: `wind` (passed by `fnc_schedulePush`) is a
 /// 3-element `[x, y, z]` vector, not 2 -- `cmd_sim_state`'s param type used
 /// to require exactly 2, so every real `sim:state` call failed arg parsing
 /// and simulation state was never updated.

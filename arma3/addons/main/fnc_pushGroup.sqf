@@ -2,8 +2,8 @@
 /*
     Pushes one group's (and its tracked units') current state into
     minerva-server via a single "group:upsert" call. Called once per group
-    per push cycle by fnc_schedulePush, and immediately (out of its regular
-    turn) by fnc_requestGroupPush.
+    per push cycle by fnc_schedulePush, and again out of its regular turn
+    when fnc_schedulePush drains the dirty queue fnc_requestGroupPush fills.
 
     IDs are `x call BIS_fnc_netId`, stable across save/load and correct
     in both SP and MP (unlike the native `netId` command). It takes the
@@ -25,22 +25,31 @@ private _fnc_avg = {
 
 private _groupId = _group call BIS_fnc_netId;
 
+// Every group's `waypoints` starts with index 0, an implicit MOVE waypoint
+// at its spawn position that exists even when nothing was ever placed.
+// Reporting it would show each idle group as ordered to its own spawn point,
+// so it is skipped here; `_allWaypoints` keeps it for the _hasTask count below.
+private _allWaypoints = waypoints _group;
 private _waypoints = [];
 {
-    // waypointType already returns a plain string; str() would add a
-    // second layer of quoting that never matches convert::waypoint_type_from_str.
-    // waypointPosition is always AGL regardless of how the waypoint was
-    // placed; convert to ASL to match the protocol's positions (and
-    // fnc_executeCommand.sqf's addWaypoint, which expects ASL back).
-    _waypoints pushBack [waypointType _x, AGLToASL (waypointPosition _x)];
-} forEach (waypoints _group);
+    if ((_x select 1) > 0) then {
+        // waypointType already returns a plain string; str() would add a
+        // second layer of quoting that never matches convert::waypoint_type_from_str.
+        // waypointPosition is always AGL regardless of how the waypoint was
+        // placed; convert to ASL to match the protocol's positions (and
+        // fnc_executeCommand.sqf's addWaypoint, which expects ASL back).
+        _waypoints pushBack [waypointType _x, AGLToASL (waypointPosition _x)];
+    };
+} forEach _allWaypoints;
 
 // No generic "ammo fraction" command exists for a mixed group; report
 // full until a real ammo model is built.
 private _ammoState = 1;
 // Completed waypoints stay in `waypoints _group`; once the last one is
 // done currentWaypoint moves one past the end, so only that means idle.
-private _hasTask = (currentWaypoint _group) < (count _waypoints);
+// currentWaypoint indexes the full list including the implicit index 0, so
+// this compares against `_allWaypoints`, not the trimmed `_waypoints`.
+private _hasTask = (currentWaypoint _group) < (count _allWaypoints);
 
 // `units _group` gives the group's members, which for a crewed vehicle
 // are the crew (persons), not the vehicle -- report the vehicle itself

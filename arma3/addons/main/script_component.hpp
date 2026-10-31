@@ -3,5 +3,5 @@
 #define COMPONENT main
 #define COMPONENT_BEAUTIFIED Main
 
-// Seconds between fnc_pushState runs (the per-frame handler's interval).
+// Seconds one push cycle spans: fnc_schedulePush gives every group a turn once per TICK.
 #define TICK 1
