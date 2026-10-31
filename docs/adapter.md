@@ -70,6 +70,8 @@ A failed call returns `nil` to SQF.
 - Factions (`SimulationInfo.factions`) are empty unless mission code sets `GVAR(factions)`
   before `postInit` runs (there's no generic way to enumerate "the factions in play" from
   SQF alone).
+- `SimulationInfo.engine` is always `arma3`. The extension sets it, so `sim:info`'s SQF
+  arguments are unchanged and a mission cannot misreport it.
 - A crewed vehicle is reported as a single unit belonging to one deterministic owning
   group (the group of the first real crew seat -- driver, then commander/gunner/turrets),
   not one unit per crew member and not shared between the crew's group and any group

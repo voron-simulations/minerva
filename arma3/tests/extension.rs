@@ -500,6 +500,7 @@ async fn sim_info_and_state_are_visible_via_grpc() {
     .into_inner();
     let info = expect_some(info.info);
     assert_eq!(info.world_name, "Altis");
+    assert_eq!(info.engine, "arma3");
     let world_size = expect_some(info.world_size);
     assert_eq!(
         (world_size.x_meters, world_size.y_meters),

@@ -166,6 +166,9 @@ fn cmd_sim_info(
     with_server(&ctx, |handle| {
         handle.state().set_simulation_info(proto::SimulationInfo {
             world_name,
+            // Set here rather than passed from SQF: this crate is the Arma 3
+            // adapter, so it is the authority on which engine it is.
+            engine: "arma3".to_string(),
             world_size: Some(proto::WorldSize {
                 x_meters: world_size[0],
                 y_meters: world_size[1],

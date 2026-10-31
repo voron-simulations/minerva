@@ -17,6 +17,13 @@ message SimulationInfo {
   WorldSize world_size = 2;
   repeated Faction factions = 3;
 
+  // Lowercase, stable identifier of the simulation engine (adapter) that
+  // produced this data, e.g. "arma3". Future adapters use their own, e.g.
+  // "dcs" or "cmo". `world_name` alone is ambiguous across engines, so clients
+  // may combine it with this field to select engine-specific assets, such as
+  // map images.
+  string engine = 4;
+
   int64 simulation_start_sim_time = 10; // in-simulation time at scenario start (unix timestamp)
   int64 simulation_start_real_time = 11; // real world time of simulation start (unix timestamp)
 }
