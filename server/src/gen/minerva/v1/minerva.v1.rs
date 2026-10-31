@@ -489,6 +489,13 @@ pub struct SimulationInfo {
     pub world_size: ::core::option::Option<WorldSize>,
     #[prost(message, repeated, tag="3")]
     pub factions: ::prost::alloc::vec::Vec<Faction>,
+    /// Lowercase, stable identifier of the simulation engine (adapter) that
+    /// produced this data, e.g. "arma3". Future adapters use their own, e.g.
+    /// "dcs" or "cmo". `world_name` alone is ambiguous across engines, so clients
+    /// may combine it with this field to select engine-specific assets, such as
+    /// map images.
+    #[prost(string, tag="4")]
+    pub engine: ::prost::alloc::string::String,
     /// in-simulation time at scenario start (unix timestamp)
     #[prost(int64, tag="10")]
     pub simulation_start_sim_time: i64,

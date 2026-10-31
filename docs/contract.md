@@ -22,6 +22,16 @@ behavior within these rules.
   simulation-time rate relative to real time, as reported by the engine.
   Neither timestamp is guaranteed finer than whole-minute precision.
 
+## Simulation identity
+
+`SimulationInfo.engine` is a lowercase, stable identifier of the engine (adapter)
+that produced the data, e.g. `arma3`; later adapters use their own, such as `dcs` or
+`cmo`. A server reports it itself, it is never taken from the simulation. `world_name`
+is only unique within one engine (different engines may ship a world with the same
+name), so a client selecting engine-specific assets, such as map images, keys them by
+`engine` and `world_name` together. An empty `engine` means the server predates the
+field; a client should treat the engine as unknown rather than assume one.
+
 ## Command targets
 
 `MoveCommand`, `SearchAndDestroyCommand`, `PatrolCommand`, and
