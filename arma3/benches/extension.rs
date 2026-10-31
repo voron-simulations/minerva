@@ -1,7 +1,8 @@
 //! Measures the full `group:upsert` call path -- string marshalling,
 //! `FromArma` parsing, and the `StateCache` write -- since that's what runs
-//! once per group, per tick, in `fnc_pushGroup.sqf` (one call for the whole
-//! group, its full unit list included, not one per tracked unit).
+//! for each group whose state changed (or is due its periodic refresh) in
+//! `fnc_pushGroup.sqf` (one call for the whole group, its full unit list
+//! included, not one per tracked unit).
 
 use std::hint::black_box;
 
