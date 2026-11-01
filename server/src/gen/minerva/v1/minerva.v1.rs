@@ -541,7 +541,9 @@ pub struct SimulationInfo {
     /// The command kinds this server dispatches to the engine; any other kind
     /// fails with "not supported" without reaching the engine. Engines implement
     /// different subsets of the command set, so a client reads this to offer
-    /// only the commands that can succeed. Empty means no command is supported.
+    /// only the commands that can succeed. Empty means no command is supported,
+    /// but a server built before this field also sends an empty list, so the two
+    /// cannot be told apart.
     #[prost(enumeration="CommandKind", repeated, tag="5")]
     pub supported_commands: ::prost::alloc::vec::Vec<i32>,
     /// in-simulation time at scenario start (unix timestamp)

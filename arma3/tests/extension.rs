@@ -14,8 +14,9 @@ use minerva_server::proto::simulation_service_client::SimulationServiceClient;
 use minerva_server::proto::unit_service_client::UnitServiceClient;
 use minerva_server::proto::{
     CommandKind, CommandResult, CommandTarget, DefendZoneCommand, GetSimulationInfoRequest,
-    GetUnitRequest, ListGroupsRequest, ListUnitsRequest, MoveCommand, SendCommandRequest,
-    SubscribeGroupUpdatesRequest, SubscribeSimulationUpdatesRequest, SupportCommand,
+    GetUnitRequest, ListGroupsRequest, ListUnitsRequest, MoveCommand, PatrolCommand,
+    SearchAndDestroyCommand, SendCommandRequest, SubscribeGroupUpdatesRequest,
+    SubscribeSimulationUpdatesRequest, SupportCommand,
 };
 use tokio_stream::StreamExt;
 
@@ -528,6 +529,27 @@ async fn sim_info_and_state_are_visible_via_grpc() {
     assert!((weather.wind_speed - 5.0).abs() < 1e-3);
 }
 
+/// Blocks until the sink's next `minerva`/`command` callback and returns its
+/// payload, `[id, type, groupId, ...]`. Blocks this task/thread (not a spawned
+/// client call); safe since `extension` never needs to cross a thread/task
+/// boundary itself (crossbeam channels don't care).
+fn next_command_callback(extension: &arma_rs::testing::Extension) -> Vec<Value> {
+    let callback = extension.callback_handler::<_, Option<Value>, String>(
+        |name, func, data| {
+            if name == "minerva" && func == "command" {
+                arma_rs::testing::Result::Ok(data)
+            } else {
+                arma_rs::testing::Result::Continue
+            }
+        },
+        Duration::from_secs(5),
+    );
+    match callback {
+        arma_rs::testing::Result::Ok(Some(Value::Array(items))) => items,
+        other => panic!("unexpected callback result: {other:?}"),
+    }
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn send_command_acked_via_callback_and_ack() {
     let extension = init().testing();
@@ -549,27 +571,7 @@ async fn send_command_acked_via_callback_and_ack() {
     };
     let call = tokio::spawn(async move { commands.send_command(request).await });
 
-    // Blocks this task/thread (not the spawned one above) until the sink's
-    // callback arrives; safe since `extension` never needs to cross a
-    // thread/task boundary itself (crossbeam channels don't care).
-    let callback = extension.callback_handler::<_, Option<Value>, String>(
-        |name, func, data| {
-            if name == "minerva" && func == "command" {
-                arma_rs::testing::Result::Ok(data)
-            } else {
-                arma_rs::testing::Result::Continue
-            }
-        },
-        Duration::from_secs(5),
-    );
-    let data = match callback {
-        arma_rs::testing::Result::Ok(data) => data,
-        other => panic!("unexpected callback result: {other:?}"),
-    };
-    let items = match data {
-        Some(Value::Array(items)) => items,
-        other => panic!("unexpected callback payload: {other:?}"),
-    };
+    let items = next_command_callback(&extension);
     let id = match items.first() {
         Some(Value::String(s)) => s.clone(),
         other => panic!("expected string id as the first callback element, got {other:?}"),
@@ -590,11 +592,150 @@ async fn send_command_acked_via_callback_and_ack() {
     assert_eq!(response.result, CommandResult::Success as i32);
 }
 
-/// `DefendZone` and `Support` have no SQF implementation, so the server must
-/// refuse them itself: if one reached the callback, SQF would be the one
-/// deciding to reject it, and the advertised list would be only advice.
+/// A request for `kind` and the callback payload after the command id that
+/// `ArmaCommandSink` must produce for it, `[type, groupId, ...]`. A supported
+/// kind with no entry here fails the test, so the supported list cannot grow
+/// without its payload being pinned down.
+fn request_and_payload(kind: CommandKind) -> (SendCommandRequest, Vec<Value>) {
+    let text = |s: &str| Value::String(s.to_string());
+    let number = Value::Number;
+    // A target's z travels as `[]` when absent and `[z]` when present.
+    match kind {
+        CommandKind::Move => (
+            SendCommandRequest {
+                command: Some(CommandOneof::Move(MoveCommand {
+                    position: Some(CommandTarget {
+                        x: 1.0,
+                        y: 2.0,
+                        z: Some(3.0),
+                    }),
+                    group_id: "g1".to_string(),
+                })),
+            },
+            vec![
+                text("move"),
+                text("g1"),
+                number(1.0),
+                number(2.0),
+                Value::Array(vec![number(3.0)]),
+            ],
+        ),
+        CommandKind::SearchAndDestroy => (
+            SendCommandRequest {
+                command: Some(CommandOneof::SearchAndDestroy(SearchAndDestroyCommand {
+                    position: Some(CommandTarget {
+                        x: 4.0,
+                        y: 5.0,
+                        z: None,
+                    }),
+                    group_id: "g1".to_string(),
+                })),
+            },
+            vec![
+                text("search_and_destroy"),
+                text("g1"),
+                number(4.0),
+                number(5.0),
+                Value::Array(Vec::new()),
+            ],
+        ),
+        CommandKind::Patrol => (
+            SendCommandRequest {
+                command: Some(CommandOneof::Patrol(PatrolCommand {
+                    group_id: "g1".to_string(),
+                    waypoints: vec![
+                        CommandTarget {
+                            x: 1.0,
+                            y: 2.0,
+                            z: None,
+                        },
+                        CommandTarget {
+                            x: 3.0,
+                            y: 4.0,
+                            z: Some(5.0),
+                        },
+                    ],
+                    r#loop: true,
+                })),
+            },
+            vec![
+                text("patrol"),
+                text("g1"),
+                Value::Boolean(true),
+                number(1.0),
+                number(2.0),
+                Value::Array(Vec::new()),
+                number(3.0),
+                number(4.0),
+                Value::Array(vec![number(5.0)]),
+            ],
+        ),
+        other => panic!("{other:?} is advertised as supported but has no payload test"),
+    }
+}
+
+/// Ties the advertised list to what is dispatched: every kind the extension
+/// says it supports must reach SQF as a callback of the shape
+/// `fnc_executeCommand.sqf` decodes, and succeed once SQF acks it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn unsupported_commands_fail_without_reaching_the_engine() {
+async fn every_supported_kind_is_dispatched_to_sqf() {
+    let extension = init().testing();
+    let (bound, code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
+    assert_eq!(code, 0);
+    let (_, code) = extension.call(
+        "sim:info",
+        Some(vec![
+            quoted("Altis"),
+            "[15360,10240]".to_string(),
+            "[]".to_string(),
+            "[2026,1,1,0,0]".to_string(),
+        ]),
+    );
+    assert_eq!(code, 0);
+    let (_, code) = extension.call("group:upsert", Some(group_upsert_args("g1", "WEST", "[]")));
+    assert_eq!(code, 0);
+
+    let mut simulation = expect(SimulationServiceClient::connect(format!("http://{bound}")).await);
+    let info = expect(
+        simulation
+            .get_simulation_info(GetSimulationInfoRequest {})
+            .await,
+    )
+    .into_inner();
+    let supported = expect_some(info.info).supported_commands;
+    assert!(!supported.is_empty());
+
+    let commands = expect(CommandServiceClient::connect(format!("http://{bound}")).await);
+    for kind in supported {
+        let kind = expect(CommandKind::try_from(kind));
+        let (request, expected) = request_and_payload(kind);
+        let mut client = commands.clone();
+        let call = tokio::spawn(async move { client.send_command(request).await });
+
+        let items = next_command_callback(&extension);
+        let id = match items.first() {
+            Some(Value::String(id)) => id.clone(),
+            other => panic!("{kind:?}: expected a string id first, got {other:?}"),
+        };
+        assert_eq!(items[1..], expected[..], "{kind:?}: callback payload");
+
+        let (_, ack_code) = extension.call(
+            "command:ack",
+            Some(vec![quoted(&id), "true".to_string(), quoted("")]),
+        );
+        assert_eq!(ack_code, 0);
+        let response = expect(expect(call.await)).into_inner();
+        assert_eq!(response.result, CommandResult::Success as i32, "{kind:?}");
+    }
+}
+
+/// `DefendZone` and `Support` have no SQF implementation, so the server must
+/// refuse them itself. Nothing acks in this test, so a command that reached
+/// the sink would come back as "timeout" after the dispatcher's wait rather
+/// than "not supported": the reason is what shows the refusal came from the
+/// server.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unsupported_commands_fail_with_not_supported() {
     let extension = init().testing();
     let (bound, code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
     assert_eq!(code, 0);
@@ -623,19 +764,4 @@ async fn unsupported_commands_fail_without_reaching_the_engine() {
         assert_eq!(response.result, CommandResult::Failure as i32);
         assert_eq!(response.reason, "not supported");
     }
-
-    let callback = extension.callback_handler::<_, Option<Value>, String>(
-        |name, func, data| {
-            if name == "minerva" && func == "command" {
-                arma_rs::testing::Result::Ok(data)
-            } else {
-                arma_rs::testing::Result::Continue
-            }
-        },
-        Duration::from_millis(300),
-    );
-    assert!(
-        matches!(callback, arma_rs::testing::Result::Timeout),
-        "no command callback should have been sent, got {callback:?}"
-    );
 }

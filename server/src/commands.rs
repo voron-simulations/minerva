@@ -539,7 +539,9 @@ mod tests {
             CommandOutcome::Failure("not supported".to_string())
         );
         assert_eq!(sink.dispatched(), 0);
-        assert_eq!(dispatcher.pending.lock().borrow().len(), 0);
+        // Refused before an id was taken: the first command the sink does
+        // accept still gets the first id.
+        assert_eq!(dispatcher.ids.next(), CommandId(0));
     }
 
     #[tokio::test]

@@ -7,7 +7,7 @@ use minerva_server::{Command, CommandId, CommandKind, CommandSink};
 /// picked up on the SQF side by `fnc_onCallback`/`fnc_executeCommand`. The
 /// callback data is `[id, type, groupId, ...]`, `id` as a decimal string (to
 /// round-trip exactly through `command:ack` regardless of magnitude), `type`
-/// one of "move"/"search_and_destroy"/"patrol".
+/// one of "move"/"search_and_destroy"/"defend_zone"/"patrol"/"support".
 pub struct ArmaCommandSink {
     context: Context,
 }
@@ -19,9 +19,13 @@ impl ArmaCommandSink {
 }
 
 /// The kinds `fnc_executeCommand.sqf` has a `case` for. Reported to clients
-/// as `SimulationInfo.supported_commands`, and the only kinds the server will
-/// hand to [`ArmaCommandSink::dispatch`]: add a kind here and in the SQF
-/// together.
+/// as `SimulationInfo.supported_commands`, and all the server will hand to
+/// [`ArmaCommandSink::dispatch`]: add a kind here and in the SQF together.
+///
+/// `dispatch` still forwards every kind, so a kind that ever got past the
+/// server's filter would be answered by the SQF `default` case ("unknown
+/// command type") at once instead of silently timing out; the extension
+/// installs no `tracing` subscriber, so a log line here would go nowhere.
 const SUPPORTED: &[CommandKind] = &[
     CommandKind::Move,
     CommandKind::SearchAndDestroy,
@@ -44,6 +48,17 @@ impl CommandSink for ArmaCommandSink {
                 group_id,
                 command_target_values(position),
             ),
+            Command::DefendZone {
+                group_id,
+                zone_id,
+                position,
+            } => {
+                let mut extra = vec![Value::String(zone_id.clone())];
+                if let Some(position) = position {
+                    extra.extend(command_target_values(position));
+                }
+                ("defend_zone", group_id, extra)
+            }
             Command::Patrol {
                 group_id,
                 waypoints,
@@ -53,17 +68,18 @@ impl CommandSink for ArmaCommandSink {
                 extra.extend(waypoints.iter().flat_map(command_target_values));
                 ("patrol", group_id, extra)
             }
-            // The dispatcher only hands over kinds listed in `SUPPORTED`, so
-            // reaching this is a bug upstream. SQF would answer it with a
-            // misleading "unknown command type"; dropping it here leaves the
-            // caller a plain timeout and puts the cause in the log.
-            Command::DefendZone { .. } | Command::Support { .. } => {
-                tracing::error!(
-                    kind = ?command.kind(),
-                    "minerva: dispatched a command kind this adapter does not support"
-                );
-                return;
-            }
+            Command::Support {
+                supporter_group_id,
+                supported_group_id,
+                support_type,
+            } => (
+                "support",
+                supporter_group_id,
+                vec![
+                    Value::String(supported_group_id.to_string()),
+                    Value::String(support_type.clone()),
+                ],
+            ),
         };
 
         let mut payload = vec![

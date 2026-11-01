@@ -76,9 +76,9 @@ targeting an unknown group.
 
 `SimulationInfo.supported_commands` lists the `CommandKind`s the server will
 dispatch to the engine, so a client offers only commands that can succeed. It
-is exactly that set: a command of any other kind returns
-`COMMAND_RESULT_FAILURE` with the reason `not supported` and never reaches the
-engine, whichever group it names. An empty list means the server supports no
+is exactly that set: a well-formed command of any other kind (one that passes
+the `INVALID_ARGUMENT` checks above) returns `COMMAND_RESULT_FAILURE` with the
+reason `not supported` and never reaches the engine, whichever group it names. An empty list means the server supports no
 commands, though a server that predates the field also sends an empty list and
 cannot be told apart from one. The list is sorted by enum value without
 repeats and does not change while the server runs. Like the rest of
