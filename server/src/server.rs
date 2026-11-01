@@ -65,6 +65,7 @@ async fn serve_on(
         )))
         .add_service(SimulationServiceServer::new(SimulationServiceImpl::new(
             state.clone(),
+            dispatcher.clone(),
         )))
         .add_service(UnitServiceServer::new(UnitServiceImpl::new(state)))
         .serve_with_incoming_shutdown(incoming, shutdown)

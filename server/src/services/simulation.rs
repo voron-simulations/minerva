@@ -4,6 +4,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
+use crate::commands::Dispatcher;
 use crate::proto;
 use crate::services::ResponseStream;
 use crate::state::{SimulationEvent, StateCache};
@@ -12,11 +13,12 @@ const SUBSCRIBER_CHANNEL_CAPACITY: usize = 16;
 
 pub struct SimulationServiceImpl {
     state: Arc<StateCache>,
+    dispatcher: Arc<Dispatcher>,
 }
 
 impl SimulationServiceImpl {
-    pub fn new(state: Arc<StateCache>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<StateCache>, dispatcher: Arc<Dispatcher>) -> Self {
+        Self { state, dispatcher }
     }
 }
 
@@ -26,10 +28,19 @@ impl proto::simulation_service_server::SimulationService for SimulationServiceIm
         &self,
         _request: Request<proto::GetSimulationInfoRequest>,
     ) -> Result<Response<proto::GetSimulationInfoResponse>, Status> {
-        let info = self
+        let mut info = self
             .state
             .simulation_info()
             .ok_or_else(|| Status::unavailable("simulation info not set"))?;
+        // Filled in here from the dispatcher, overwriting whatever an adapter
+        // put in the cached info, so the advertised set is exactly the one
+        // `Dispatcher::send` enforces.
+        info.supported_commands = self
+            .dispatcher
+            .supported()
+            .iter()
+            .map(|kind| proto::CommandKind::from(*kind) as i32)
+            .collect();
         Ok(Response::new(proto::GetSimulationInfoResponse {
             info: Some(info),
         }))

@@ -85,6 +85,48 @@ pub struct SendCommandResponse {
     #[prost(string, tag="2")]
     pub reason: ::prost::alloc::string::String,
 }
+/// The kinds of command a server can execute, one per `SendCommandRequest`
+/// oneof case. `SimulationInfo.supported_commands` lists the kinds an engine
+/// actually implements, so a client offers only commands that can succeed
+/// instead of finding out by sending them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum CommandKind {
+    Unspecified = 0,
+    Move = 1,
+    SearchAndDestroy = 2,
+    DefendZone = 3,
+    Patrol = 4,
+    Support = 5,
+}
+impl CommandKind {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "COMMAND_KIND_UNSPECIFIED",
+            Self::Move => "COMMAND_KIND_MOVE",
+            Self::SearchAndDestroy => "COMMAND_KIND_SEARCH_AND_DESTROY",
+            Self::DefendZone => "COMMAND_KIND_DEFEND_ZONE",
+            Self::Patrol => "COMMAND_KIND_PATROL",
+            Self::Support => "COMMAND_KIND_SUPPORT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "COMMAND_KIND_UNSPECIFIED" => Some(Self::Unspecified),
+            "COMMAND_KIND_MOVE" => Some(Self::Move),
+            "COMMAND_KIND_SEARCH_AND_DESTROY" => Some(Self::SearchAndDestroy),
+            "COMMAND_KIND_DEFEND_ZONE" => Some(Self::DefendZone),
+            "COMMAND_KIND_PATROL" => Some(Self::Patrol),
+            "COMMAND_KIND_SUPPORT" => Some(Self::Support),
+            _ => None,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum CommandResult {
@@ -496,6 +538,14 @@ pub struct SimulationInfo {
     /// map images.
     #[prost(string, tag="4")]
     pub engine: ::prost::alloc::string::String,
+    /// The command kinds this server dispatches to the engine; any other kind
+    /// fails with "not supported" without reaching the engine. Engines implement
+    /// different subsets of the command set, so a client reads this to offer
+    /// only the commands that can succeed. Empty means no command is supported,
+    /// but a server built before this field also sends an empty list, so the two
+    /// cannot be told apart.
+    #[prost(enumeration="CommandKind", repeated, tag="5")]
+    pub supported_commands: ::prost::alloc::vec::Vec<i32>,
     /// in-simulation time at scenario start (unix timestamp)
     #[prost(int64, tag="10")]
     pub simulation_start_sim_time: i64,

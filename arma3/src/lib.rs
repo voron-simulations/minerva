@@ -174,6 +174,9 @@ fn cmd_sim_info(
                 y_meters: world_size[1],
             }),
             factions,
+            // Left empty on purpose: the server reports the command sink's
+            // own list from `GetSimulationInfo`, whatever is cached here.
+            supported_commands: Vec::new(),
             simulation_start_sim_time: convert::unix_time_from_arma_date(start_date),
             simulation_start_real_time: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

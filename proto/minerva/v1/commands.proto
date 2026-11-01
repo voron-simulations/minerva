@@ -42,6 +42,19 @@ message SupportCommand {
   string support_type = 3; // "resupply", "medical", "repair", etc.
 }
 
+// The kinds of command a server can execute, one per `SendCommandRequest`
+// oneof case. `SimulationInfo.supported_commands` lists the kinds an engine
+// actually implements, so a client offers only commands that can succeed
+// instead of finding out by sending them.
+enum CommandKind {
+  COMMAND_KIND_UNSPECIFIED = 0;
+  COMMAND_KIND_MOVE = 1;
+  COMMAND_KIND_SEARCH_AND_DESTROY = 2;
+  COMMAND_KIND_DEFEND_ZONE = 3;
+  COMMAND_KIND_PATROL = 4;
+  COMMAND_KIND_SUPPORT = 5;
+}
+
 enum CommandResult {
   COMMAND_RESULT_UNSPECIFIED = 0;
   COMMAND_RESULT_SUCCESS = 1;

@@ -16,11 +16,14 @@ use minerva_server::proto::subscribe_group_updates_response::Event as GroupEvent
 use minerva_server::proto::unit_service_client::UnitServiceClient;
 use minerva_server::proto::{
     CommandResult, CommandTarget, GetSimulationInfoRequest, GetUnitRequest, Group,
-    ListGroupsRequest, ListLocationsRequest, ListUnitsRequest, Location, MoveCommand, Position,
-    SendCommandRequest, Side, SimulationInfo, SimulationStateUpdate, SubscribeGroupUpdatesRequest,
-    SubscribeGroupUpdatesResponse, SubscribeSimulationUpdatesRequest, Unit, UnitState,
+    ListGroupsRequest, ListLocationsRequest, ListUnitsRequest, Location, MoveCommand,
+    PatrolCommand, Position, SendCommandRequest, Side, SimulationInfo, SimulationStateUpdate,
+    SubscribeGroupUpdatesRequest, SubscribeGroupUpdatesResponse, SubscribeSimulationUpdatesRequest,
+    Unit, UnitState,
 };
-use minerva_server::{Command, CommandId, CommandSink, GroupId, ServerConfig, ServerHandle};
+use minerva_server::{
+    Command, CommandId, CommandKind, CommandSink, GroupId, ServerConfig, ServerHandle,
+};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 
@@ -60,9 +63,14 @@ fn endpoint(addr: SocketAddr) -> String {
 /// drive (ack, or just let it time out).
 struct RecordingSink {
     tx: mpsc::UnboundedSender<(CommandId, Command)>,
+    supported: Vec<CommandKind>,
 }
 
 impl CommandSink for RecordingSink {
+    fn supported(&self) -> &[CommandKind] {
+        &self.supported
+    }
+
     fn dispatch(&self, id: CommandId, command: &Command) {
         let _ = self.tx.send((id, command.clone()));
     }
@@ -71,8 +79,18 @@ impl CommandSink for RecordingSink {
 fn spawn_server(
     command_timeout: Duration,
 ) -> (ServerHandle, mpsc::UnboundedReceiver<(CommandId, Command)>) {
+    spawn_server_supporting(command_timeout, CommandKind::ALL)
+}
+
+fn spawn_server_supporting(
+    command_timeout: Duration,
+    supported: &[CommandKind],
+) -> (ServerHandle, mpsc::UnboundedReceiver<(CommandId, Command)>) {
     let (tx, rx) = mpsc::unbounded_channel();
-    let sink = Arc::new(RecordingSink { tx });
+    let sink = Arc::new(RecordingSink {
+        tx,
+        supported: supported.to_vec(),
+    });
     let addr = expect("127.0.0.1:0".parse());
     let config = ServerConfig {
         addr,
@@ -116,6 +134,32 @@ fn move_request(group_id: &str) -> SendCommandRequest {
             group_id: group_id.to_string(),
         })),
     }
+}
+
+fn patrol_request(group_id: &str) -> SendCommandRequest {
+    SendCommandRequest {
+        command: Some(CommandOneof::Patrol(PatrolCommand {
+            group_id: group_id.to_string(),
+            waypoints: vec![CommandTarget {
+                x: 1.0,
+                y: 2.0,
+                z: None,
+            }],
+            r#loop: false,
+        })),
+    }
+}
+
+async fn supported_commands_of(handle: &ServerHandle) -> Vec<i32> {
+    let mut simulation =
+        expect(SimulationServiceClient::connect(endpoint(handle.local_addr())).await);
+    let info = expect(
+        simulation
+            .get_simulation_info(GetSimulationInfoRequest {})
+            .await,
+    )
+    .into_inner();
+    expect_some(info.info).supported_commands
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -430,5 +474,103 @@ async fn send_command_unknown_group_fails_without_dispatch() {
     assert!(
         rx.try_recv().is_err(),
         "unknown group must not be dispatched to the sink"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn send_command_unsupported_kind_fails_without_dispatch() {
+    let (handle, mut rx) = spawn_server_supporting(Duration::from_secs(5), &[CommandKind::Move]);
+    handle.state().upsert_group(a_group("g1", Side::Blufor));
+
+    let mut commands = expect(CommandServiceClient::connect(endpoint(handle.local_addr())).await);
+    let response = expect(commands.send_command(patrol_request("g1")).await).into_inner();
+
+    assert_eq!(response.result, CommandResult::Failure as i32);
+    assert_eq!(response.reason, "not supported");
+    assert!(
+        rx.try_recv().is_err(),
+        "an unsupported kind must not be dispatched to the sink"
+    );
+}
+
+/// The contract promises "not supported" for any command outside the
+/// advertised set, so a client probing with a made-up group still learns
+/// the real reason.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn send_command_unsupported_kind_is_reported_before_an_unknown_group() {
+    let (handle, mut rx) = spawn_server_supporting(Duration::from_secs(5), &[CommandKind::Move]);
+
+    let mut commands = expect(CommandServiceClient::connect(endpoint(handle.local_addr())).await);
+    let response =
+        expect(commands.send_command(patrol_request("no-such-group")).await).into_inner();
+
+    assert_eq!(response.result, CommandResult::Failure as i32);
+    assert_eq!(response.reason, "not supported");
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn send_command_supported_kind_still_dispatches() {
+    let (handle, mut rx) = spawn_server_supporting(Duration::from_secs(5), &[CommandKind::Move]);
+    handle.state().upsert_group(a_group("g1", Side::Blufor));
+
+    let mut commands = expect(CommandServiceClient::connect(endpoint(handle.local_addr())).await);
+    let dispatcher = handle.dispatcher().clone();
+    let request = move_request("g1");
+    let call = tokio::spawn(async move { commands.send_command(request).await });
+
+    let (id, dispatched) = expect_some(rx.recv().await);
+    assert_eq!(dispatched.kind(), CommandKind::Move);
+    assert!(dispatcher.complete(id, minerva_server::CommandOutcome::Success));
+
+    let response = expect(expect(call.await)).into_inner();
+    assert_eq!(response.result, CommandResult::Success as i32);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn simulation_info_reports_the_supported_commands() {
+    // Listed out of order and with a repeat: the wire list is sorted and
+    // unique so clients can compare it without normalising.
+    let (handle, _rx) = spawn_server_supporting(
+        Duration::from_secs(5),
+        &[CommandKind::Patrol, CommandKind::Move, CommandKind::Patrol],
+    );
+    handle
+        .state()
+        .set_simulation_info(SimulationInfo::default());
+
+    assert_eq!(
+        supported_commands_of(&handle).await,
+        vec![
+            minerva_server::proto::CommandKind::Move as i32,
+            minerva_server::proto::CommandKind::Patrol as i32,
+        ]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn simulation_info_reports_no_commands_when_the_sink_supports_none() {
+    let (handle, _rx) = spawn_server_supporting(Duration::from_secs(5), &[]);
+    handle
+        .state()
+        .set_simulation_info(SimulationInfo::default());
+
+    assert!(supported_commands_of(&handle).await.is_empty());
+}
+
+/// The sink's claim is the only source: an adapter that also fills the field
+/// in its own `SimulationInfo` must not be able to advertise a command the
+/// dispatcher would refuse.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn simulation_info_ignores_a_supported_list_set_by_the_adapter() {
+    let (handle, _rx) = spawn_server_supporting(Duration::from_secs(5), &[CommandKind::Move]);
+    handle.state().set_simulation_info(SimulationInfo {
+        supported_commands: vec![minerva_server::proto::CommandKind::Support as i32],
+        ..Default::default()
+    });
+
+    assert_eq!(
+        supported_commands_of(&handle).await,
+        vec![minerva_server::proto::CommandKind::Move as i32]
     );
 }

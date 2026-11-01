@@ -1,6 +1,6 @@
 use arma_rs::{Context, Value};
 use minerva_server::proto::CommandTarget;
-use minerva_server::{Command, CommandId, CommandSink};
+use minerva_server::{Command, CommandId, CommandKind, CommandSink};
 
 /// Dispatches commands into Arma via an `ExtensionCallback`
 /// (<https://community.bistudio.com/wiki/Arma_3:_Mission_Event_Handlers#ExtensionCallback>),
@@ -18,7 +18,25 @@ impl ArmaCommandSink {
     }
 }
 
+/// The kinds `fnc_executeCommand.sqf` has a `case` for. Reported to clients
+/// as `SimulationInfo.supported_commands`, and all the server will hand to
+/// [`ArmaCommandSink::dispatch`]: add a kind here and in the SQF together.
+///
+/// `dispatch` still forwards every kind, so a kind that ever got past the
+/// server's filter would be answered by the SQF `default` case ("unknown
+/// command type") at once instead of silently timing out; the extension
+/// installs no `tracing` subscriber, so a log line here would go nowhere.
+const SUPPORTED: &[CommandKind] = &[
+    CommandKind::Move,
+    CommandKind::SearchAndDestroy,
+    CommandKind::Patrol,
+];
+
 impl CommandSink for ArmaCommandSink {
+    fn supported(&self) -> &[CommandKind] {
+        SUPPORTED
+    }
+
     fn dispatch(&self, id: CommandId, command: &Command) {
         let id: u64 = id.into();
         let (kind, group_id, extra) = match command {

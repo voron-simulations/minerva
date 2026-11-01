@@ -46,10 +46,28 @@ real client end to end.
   the vehicle's crew, or lingering after removal).
 - Click-to-move on SunTzu's map: a waypoint appears in Arma at the clicked spot (on the
   ground -- the map doesn't know terrain height), and SunTzu shows the command result as
-  SUCCESS. A DefendZone command shows FAILURE with a reason (not implemented, see
-  `docs/adapter.md`).
+  SUCCESS.
 - After that click-to-move, SunTzu shows the commanded waypoint on the group, and a group
   nobody commanded shows none (Arma's implicit start waypoint is not reported).
+- **Supported commands**: SunTzu's UI can only build Move, SearchAndDestroy and Patrol, and
+  the server has no gRPC reflection, so check the rest with [grpcurl](https://github.com/fullstorydev/grpcurl),
+  from the repo root (the `.proto` files supply the schema). `supportedCommands` should list
+  exactly `COMMAND_KIND_MOVE`, `COMMAND_KIND_SEARCH_AND_DESTROY` and `COMMAND_KIND_PATROL`:
+
+  ```sh
+  grpcurl -plaintext -import-path proto -proto minerva/v1/simulation.proto \
+    127.0.0.1:50051 minerva.v1.SimulationService/GetSimulationInfo
+  ```
+
+  A DefendZone command should answer `COMMAND_RESULT_FAILURE` with the reason `not supported`
+  and place no waypoint in Arma (the group id can be any non-empty string, since the kind is
+  refused before the group is looked up; `docs/adapter.md`):
+
+  ```sh
+  grpcurl -plaintext -import-path proto -proto minerva/v1/commands.proto \
+    -d '{"defend_zone": {"group_id": "g1", "zone_id": "z1"}}' \
+    127.0.0.1:50051 minerva.v1.CommandService/SendCommand
+  ```
 - Restart the mission preview: SunTzu's map clears and repopulates from the fresh
   simulation state, rather than showing stale groups from the previous run.
 - **Large-group check**: the crewed tank's group and the 8-man squads should all push

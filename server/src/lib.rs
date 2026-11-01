@@ -16,7 +16,7 @@ mod server;
 mod services;
 mod state;
 
-pub use commands::{Command, CommandOutcome, CommandSink, Dispatcher};
+pub use commands::{Command, CommandKind, CommandOutcome, CommandSink, Dispatcher};
 pub use ids::{CommandId, GroupId, UnitId};
 pub use server::{ServerConfig, ServerHandle, serve};
 pub use state::StateCache;

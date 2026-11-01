@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tonic::{Request, Response, Status};
 
-use crate::commands::{Command, CommandOutcome, Dispatcher};
+use crate::commands::{Command, CommandOutcome, Dispatcher, NOT_SUPPORTED};
 use crate::proto;
 use crate::state::StateCache;
 
@@ -17,6 +17,13 @@ impl CommandServiceImpl {
     }
 }
 
+fn failure(reason: String) -> Response<proto::SendCommandResponse> {
+    Response::new(proto::SendCommandResponse {
+        result: proto::CommandResult::Failure as i32,
+        reason,
+    })
+}
+
 #[tonic::async_trait]
 impl proto::command_service_server::CommandService for CommandServiceImpl {
     async fn send_command(
@@ -25,13 +32,17 @@ impl proto::command_service_server::CommandService for CommandServiceImpl {
     ) -> Result<Response<proto::SendCommandResponse>, Status> {
         let command = Command::from_proto(request.into_inner())?;
 
+        // Ahead of the group lookup so a kind outside the advertised set always
+        // gets the same answer, whichever group it names. `Dispatcher::send`
+        // enforces it again; this copy only fixes the order of the two replies.
+        if !self.dispatcher.supports(command.kind()) {
+            return Ok(failure(NOT_SUPPORTED.to_string()));
+        }
+
         // Fail fast on an unknown group rather than dispatching a command the
         // engine has no group to act on.
         if self.state.get_group(command.group_id()).is_none() {
-            return Ok(Response::new(proto::SendCommandResponse {
-                result: proto::CommandResult::Failure as i32,
-                reason: format!("unknown group {}", command.group_id()),
-            }));
+            return Ok(failure(format!("unknown group {}", command.group_id())));
         }
 
         let (result, reason) = match self.dispatcher.send(command).await {

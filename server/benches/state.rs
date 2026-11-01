@@ -17,7 +17,9 @@ use minerva_server::proto::group_service_client::GroupServiceClient;
 use minerva_server::proto::{
     Group, Position, SubscribeGroupUpdatesRequest, Unit, UnitCategory, UnitState,
 };
-use minerva_server::{Command, CommandId, CommandSink, ServerConfig, ServerHandle, StateCache};
+use minerva_server::{
+    Command, CommandId, CommandKind, CommandSink, ServerConfig, ServerHandle, StateCache,
+};
 use tokio_stream::StreamExt;
 
 const UNIT_COUNT: usize = 1_000;
@@ -156,6 +158,9 @@ fn bench_upsert_group_with_units(c: &mut Criterion) {
 
 struct NoopSink;
 impl CommandSink for NoopSink {
+    fn supported(&self) -> &[CommandKind] {
+        &[]
+    }
     fn dispatch(&self, _id: CommandId, _command: &Command) {}
 }
 

@@ -91,7 +91,9 @@ A failed call returns `nil` to SQF.
 
 ## Commands
 
-- `DefendZone` and `Support` always return `COMMAND_RESULT_FAILURE` ("not implemented").
+- `SimulationInfo.supported_commands` is `MOVE`, `SEARCH_AND_DESTROY` and `PATROL`.
+  `DefendZone` and `Support` are not implemented: they return `COMMAND_RESULT_FAILURE`
+  with the reason `not supported` from the server, without reaching the game.
 - `Move`/`SearchAndDestroy`/`Patrol` place a normal `"MOVE"`/`"SAD"` waypoint. A
   `CommandTarget` with no `z` is placed at the surface (`addWaypoint`'s ordinary AGL
   interpretation, `0` meaning the ground at that x/y); a present `z` is honored as an
