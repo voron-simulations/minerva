@@ -71,8 +71,22 @@ same underlying state and never disagree with a group's embedded `units`.
 
 `SendCommandRequest` selects one command. The server returns
 `INVALID_ARGUMENT` for a missing command or required command data. Any
-command may return `COMMAND_RESULT_FAILURE` with a reason, including for a
-command type the server doesn't implement, or one targeting an unknown group.
+command may return `COMMAND_RESULT_FAILURE` with a reason, including for one
+targeting an unknown group.
+
+`SimulationInfo.supported_commands` lists the `CommandKind`s the server will
+dispatch to the engine, so a client offers only commands that can succeed. It
+is exactly that set: a command of any other kind returns
+`COMMAND_RESULT_FAILURE` with the reason `not supported` and never reaches the
+engine, whichever group it names. An empty list means the server supports no
+commands, though a server that predates the field also sends an empty list and
+cannot be told apart from one. The list is sorted by enum value without
+repeats and does not change while the server runs. Like the rest of
+`SimulationInfo` it is unavailable (`UNAVAILABLE`) until the simulation has
+reported, so a client that has not read it yet should not conclude that a
+command is unsupported. A listed kind can still fail for other reasons, such
+as an engine rejection.
+
 For a dispatched command, `COMMAND_RESULT_SUCCESS` means the engine
 acknowledged the command; it does not promise that the resulting task has
 finished. An engine rejection, timeout, or reset also returns

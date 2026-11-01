@@ -36,7 +36,9 @@ depends on the extension's C ABI.
    root `Cargo.toml`. Inherit `edition`, `license` and `repository` from
    `[workspace.package]` and take `minerva-server` with `{ workspace = true }`; put any new
    shared dependency in `[workspace.dependencies]` rather than pinning it in the crate.
-2. Implement `CommandSink` to turn a dispatched `Command` into an engine action, push
+2. Implement `CommandSink` to turn a dispatched `Command` into an engine action (and
+   declare in `supported()` which command kinds it can execute; the server refuses the
+   rest and advertises the list in `SimulationInfo.supported_commands`), push
    simulation state into the `StateCache`, and report the engine's acknowledgement with
    `Dispatcher::complete`. Start the server with `ServerHandle::spawn` when the engine
    hosts the plugin in a foreign process, or `serve` when a Tokio runtime already exists.

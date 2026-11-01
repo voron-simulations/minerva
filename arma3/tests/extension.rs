@@ -13,9 +13,9 @@ use minerva_server::proto::send_command_request::Command as CommandOneof;
 use minerva_server::proto::simulation_service_client::SimulationServiceClient;
 use minerva_server::proto::unit_service_client::UnitServiceClient;
 use minerva_server::proto::{
-    CommandResult, CommandTarget, GetSimulationInfoRequest, GetUnitRequest, ListGroupsRequest,
-    ListUnitsRequest, MoveCommand, SendCommandRequest, SubscribeGroupUpdatesRequest,
-    SubscribeSimulationUpdatesRequest,
+    CommandKind, CommandResult, CommandTarget, DefendZoneCommand, GetSimulationInfoRequest,
+    GetUnitRequest, ListGroupsRequest, ListUnitsRequest, MoveCommand, SendCommandRequest,
+    SubscribeGroupUpdatesRequest, SubscribeSimulationUpdatesRequest, SupportCommand,
 };
 use tokio_stream::StreamExt;
 
@@ -501,6 +501,16 @@ async fn sim_info_and_state_are_visible_via_grpc() {
     let info = expect_some(info.info);
     assert_eq!(info.world_name, "Altis");
     assert_eq!(info.engine, "arma3");
+    // Must stay in step with the `case` arms of `fnc_executeCommand.sqf`: this
+    // list is what a UI trusts to decide which commands to offer.
+    assert_eq!(
+        info.supported_commands,
+        vec![
+            CommandKind::Move as i32,
+            CommandKind::SearchAndDestroy as i32,
+            CommandKind::Patrol as i32,
+        ]
+    );
     let world_size = expect_some(info.world_size);
     assert_eq!(
         (world_size.x_meters, world_size.y_meters),
@@ -578,4 +588,54 @@ async fn send_command_acked_via_callback_and_ack() {
 
     let response = expect(expect(call.await)).into_inner();
     assert_eq!(response.result, CommandResult::Success as i32);
+}
+
+/// `DefendZone` and `Support` have no SQF implementation, so the server must
+/// refuse them itself: if one reached the callback, SQF would be the one
+/// deciding to reject it, and the advertised list would be only advice.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unsupported_commands_fail_without_reaching_the_engine() {
+    let extension = init().testing();
+    let (bound, code) = extension.call("start", Some(vec![quoted("127.0.0.1:0")]));
+    assert_eq!(code, 0);
+    let (_, code) = extension.call("group:upsert", Some(group_upsert_args("g1", "WEST", "[]")));
+    assert_eq!(code, 0);
+
+    let mut commands = expect(CommandServiceClient::connect(format!("http://{bound}")).await);
+    let requests = [
+        SendCommandRequest {
+            command: Some(CommandOneof::DefendZone(DefendZoneCommand {
+                group_id: "g1".to_string(),
+                zone_id: "z1".to_string(),
+                position: None,
+            })),
+        },
+        SendCommandRequest {
+            command: Some(CommandOneof::Support(SupportCommand {
+                supporter_group_id: "g1".to_string(),
+                supported_group_id: "g2".to_string(),
+                support_type: "resupply".to_string(),
+            })),
+        },
+    ];
+    for request in requests {
+        let response = expect(commands.send_command(request).await).into_inner();
+        assert_eq!(response.result, CommandResult::Failure as i32);
+        assert_eq!(response.reason, "not supported");
+    }
+
+    let callback = extension.callback_handler::<_, Option<Value>, String>(
+        |name, func, data| {
+            if name == "minerva" && func == "command" {
+                arma_rs::testing::Result::Ok(data)
+            } else {
+                arma_rs::testing::Result::Continue
+            }
+        },
+        Duration::from_millis(300),
+    );
+    assert!(
+        matches!(callback, arma_rs::testing::Result::Timeout),
+        "no command callback should have been sent, got {callback:?}"
+    );
 }

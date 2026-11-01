@@ -16,9 +16,11 @@ All `.proto` files live under `minerva/v1/`, package `minerva.v1`:
 - `unit.proto` — `Unit`, `UnitState`, `HealthState`, `UnitCategory`, `UnitService`.
 - `group.proto` — `Group`, `GroupReadiness`, `GroupService`.
 - `location.proto` — `Location`, `Capability`, `LocationService`.
-- `simulation.proto` — `WorldSize`, `SimulationInfo`, `SimulationStateUpdate`, `SimulationService`.
+- `simulation.proto` — `WorldSize`, `SimulationInfo` (including `supported_commands`),
+  `SimulationStateUpdate`, `SimulationService`.
 - `commands.proto` — `CommandTarget` (x/y plus optional ASL z, for a command's
   destination), per-command messages (`MoveCommand`, `SearchAndDestroyCommand`, ...),
+  `CommandKind` (one value per command type, listed in `SimulationInfo.supported_commands`),
   `CommandService.SendCommand` (single RPC, oneof over command types).
 - `waypoint.proto`, `weather.proto`, `loadout.proto` — supporting types.
 

@@ -18,7 +18,10 @@ directory; `cargo` commands run from the repo root, `hemtt` from here.
   `unit_from_parts` building the `Unit` embedded in a `group:upsert`).
 - `src/sink.rs` — `ArmaCommandSink`: turns a dispatched `minerva_server::Command` into an
   `ExtensionCallback` (`context.callback_data("minerva", "command", [id, type, groupId, ...])`),
-  picked up by `fnc_onCallback`/`fnc_executeCommand` on the SQF side.
+  picked up by `fnc_onCallback`/`fnc_executeCommand` on the SQF side. Its `SUPPORTED` list
+  (move, search and destroy, patrol) is what `GetSimulationInfo` advertises and all the server
+  will dispatch to it: a new command type needs a `case` in `fnc_executeCommand.sqf` and an
+  entry there.
 - `addons/main/` — the SQF side (CBA-macro layout, mirrors `arma3-dynops`'s `addons/main`).
   `fnc_pushGroup.sqf` builds one `group:upsert` payload per group (readiness,
   waypoints, and its full tracked-unit list together) and sends it unless it is unchanged
@@ -117,6 +120,6 @@ changes are picked up with no version bump.
 
 - `../docs/adapter.md` — this adapter's specific behavior within the protocol contract
   (`../docs/contract.md`): configuration, what it reports for fields the contract leaves up
-  to the server, and which commands it doesn't implement yet.
+  to the server, and which commands it supports.
 - `../docs/in-game-testing.md` — runbook for an actual in-game smoke test against a real
   Arma 3 client.

@@ -46,8 +46,8 @@ real client end to end.
   the vehicle's crew, or lingering after removal).
 - Click-to-move on SunTzu's map: a waypoint appears in Arma at the clicked spot (on the
   ground -- the map doesn't know terrain height), and SunTzu shows the command result as
-  SUCCESS. A DefendZone command shows FAILURE with a reason (not implemented, see
-  `docs/adapter.md`).
+  SUCCESS. A DefendZone command shows FAILURE with the reason `not supported`
+  (`docs/adapter.md`), and `DEFEND_ZONE` is absent from `SimulationInfo.supported_commands`.
 - After that click-to-move, SunTzu shows the commanded waypoint on the group, and a group
   nobody commanded shows none (Arma's implicit start waypoint is not reported).
 - Restart the mission preview: SunTzu's map clears and repopulates from the fresh

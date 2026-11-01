@@ -10,6 +10,47 @@ use tonic::Status;
 use crate::ids::{CommandId, CommandIdAllocator, GroupId};
 use crate::proto;
 
+/// The kind of a [`Command`], and so the unit in which a [`CommandSink`] claims
+/// what it can execute.
+///
+/// Mirrors [`proto::CommandKind`] minus `UNSPECIFIED`: a sink cannot claim, and
+/// a command cannot be, "no kind". Variants are in wire-number order, which
+/// the derived ordering relies on to report supported kinds in a stable order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CommandKind {
+    Move,
+    SearchAndDestroy,
+    DefendZone,
+    Patrol,
+    Support,
+}
+
+impl CommandKind {
+    /// Every kind, for sinks that execute the whole command set.
+    pub const ALL: &'static [CommandKind] = &[
+        CommandKind::Move,
+        CommandKind::SearchAndDestroy,
+        CommandKind::DefendZone,
+        CommandKind::Patrol,
+        CommandKind::Support,
+    ];
+}
+
+impl From<CommandKind> for proto::CommandKind {
+    fn from(kind: CommandKind) -> Self {
+        match kind {
+            CommandKind::Move => proto::CommandKind::Move,
+            CommandKind::SearchAndDestroy => proto::CommandKind::SearchAndDestroy,
+            CommandKind::DefendZone => proto::CommandKind::DefendZone,
+            CommandKind::Patrol => proto::CommandKind::Patrol,
+            CommandKind::Support => proto::CommandKind::Support,
+        }
+    }
+}
+
+/// Reason reported for a command whose kind the sink did not claim.
+pub(crate) const NOT_SUPPORTED: &str = "not supported";
+
 /// Domain form of [`proto::SendCommandRequest`], validated at the service
 /// boundary so the rest of the crate never has to handle a missing oneof
 /// or a missing required field.
@@ -53,6 +94,16 @@ impl Command {
             Command::Support {
                 supporter_group_id, ..
             } => supporter_group_id,
+        }
+    }
+
+    pub fn kind(&self) -> CommandKind {
+        match self {
+            Command::Move { .. } => CommandKind::Move,
+            Command::SearchAndDestroy { .. } => CommandKind::SearchAndDestroy,
+            Command::DefendZone { .. } => CommandKind::DefendZone,
+            Command::Patrol { .. } => CommandKind::Patrol,
+            Command::Support { .. } => CommandKind::Support,
         }
     }
 
@@ -131,6 +182,15 @@ pub enum CommandOutcome {
 /// dispatched command. Expected to return promptly; the real work happens
 /// asynchronously, acknowledged later via [`Dispatcher::complete`].
 pub trait CommandSink: Send + Sync {
+    /// The kinds of command this sink can execute. Required, with no default,
+    /// so a new engine has to decide rather than silently claim everything
+    /// (or nothing). The [`Dispatcher`] reads it once and never passes
+    /// [`CommandSink::dispatch`] a command of any other kind; the same list is
+    /// what clients see in `SimulationInfo.supported_commands`.
+    fn supported(&self) -> &[CommandKind];
+
+    /// Only called with a command whose [`Command::kind`] is in
+    /// [`CommandSink::supported`].
     fn dispatch(&self, id: CommandId, command: &Command);
 }
 
@@ -140,6 +200,10 @@ type Pending = ReentrantMutex<RefCell<HashMap<CommandId, oneshot::Sender<Command
 /// single [`CommandSink`] commands are dispatched through.
 pub struct Dispatcher {
     sink: Arc<dyn CommandSink>,
+    // Copied from the sink at construction, sorted and unique, so the list
+    // clients are told about and the one `send()` enforces are the same value
+    // and cannot drift apart.
+    supported: Vec<CommandKind>,
     timeout: Duration,
     ids: CommandIdAllocator,
     // A *reentrant* mutex, deliberately: `send()` holds this across the call
@@ -152,17 +216,38 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub fn new(sink: Arc<dyn CommandSink>, timeout: Duration) -> Self {
+        let mut supported = sink.supported().to_vec();
+        supported.sort_unstable();
+        supported.dedup();
         Self {
             sink,
+            supported,
             timeout,
             ids: CommandIdAllocator::default(),
             pending: ReentrantMutex::new(RefCell::new(HashMap::new())),
         }
     }
 
+    /// The command kinds the sink claims, sorted and without repeats. The only
+    /// kinds [`Dispatcher::send`] will pass on to it.
+    pub fn supported(&self) -> &[CommandKind] {
+        &self.supported
+    }
+
+    pub fn supports(&self, kind: CommandKind) -> bool {
+        self.supported.contains(&kind)
+    }
+
     /// Dispatches `command` and waits for the engine to acknowledge it via
-    /// [`Dispatcher::complete`], up to the configured timeout.
+    /// [`Dispatcher::complete`], up to the configured timeout. A kind the sink
+    /// does not support fails as "not supported" without reaching it.
     pub async fn send(&self, command: Command) -> CommandOutcome {
+        // This is the only path to `CommandSink::dispatch`, so checking here
+        // (not in the gRPC layer) is what guarantees an embedder calling
+        // `send` directly cannot hand a sink a kind it never claimed.
+        if !self.supports(command.kind()) {
+            return CommandOutcome::Failure(NOT_SUPPORTED.to_string());
+        }
         let id = self.ids.next();
         let (tx, rx) = oneshot::channel();
         let _guard;
@@ -351,8 +436,162 @@ mod tests {
         assert_eq!(command.group_id(), &GroupId::from("supporter"));
     }
 
+    fn a_patrol() -> Command {
+        Command::Patrol {
+            group_id: GroupId::from("g1"),
+            waypoints: vec![proto::CommandTarget::default()],
+            loop_: false,
+        }
+    }
+
+    fn one_of_each_kind() -> Vec<Command> {
+        vec![
+            move_command("g1"),
+            Command::SearchAndDestroy {
+                group_id: GroupId::from("g1"),
+                position: proto::CommandTarget::default(),
+            },
+            Command::DefendZone {
+                group_id: GroupId::from("g1"),
+                zone_id: "z1".to_string(),
+                position: None,
+            },
+            a_patrol(),
+            Command::Support {
+                supporter_group_id: GroupId::from("g1"),
+                supported_group_id: GroupId::from("g2"),
+                support_type: "resupply".to_string(),
+            },
+        ]
+    }
+
+    #[test]
+    fn kind_names_each_command_variant() {
+        let kinds: Vec<CommandKind> = one_of_each_kind().iter().map(Command::kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                CommandKind::Move,
+                CommandKind::SearchAndDestroy,
+                CommandKind::DefendZone,
+                CommandKind::Patrol,
+                CommandKind::Support,
+            ]
+        );
+    }
+
+    #[test]
+    fn all_lists_every_kind_once_in_wire_order() {
+        let wire: Vec<i32> = CommandKind::ALL
+            .iter()
+            .map(|kind| proto::CommandKind::from(*kind) as i32)
+            .collect();
+        assert_eq!(wire, vec![1, 2, 3, 4, 5]);
+        assert!(CommandKind::ALL.is_sorted());
+    }
+
+    /// Guards against a proto kind added without a matching domain kind:
+    /// every wire value except `UNSPECIFIED` must be reachable from `ALL`.
+    #[test]
+    fn all_covers_every_specified_proto_kind() {
+        let from_proto = (1..)
+            .map_while(|value| proto::CommandKind::try_from(value).ok())
+            .count();
+        assert_eq!(from_proto, CommandKind::ALL.len());
+    }
+
+    /// Counts what reaches the sink, which is what "never reaches the engine"
+    /// means for a rejected command.
+    struct CountingSink {
+        supported: &'static [CommandKind],
+        dispatched: std::sync::atomic::AtomicUsize,
+    }
+    impl CountingSink {
+        fn supporting(supported: &'static [CommandKind]) -> Arc<Self> {
+            Arc::new(Self {
+                supported,
+                dispatched: std::sync::atomic::AtomicUsize::new(0),
+            })
+        }
+        fn dispatched(&self) -> usize {
+            self.dispatched.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+    impl CommandSink for CountingSink {
+        fn supported(&self) -> &[CommandKind] {
+            self.supported
+        }
+        fn dispatch(&self, _id: CommandId, _command: &Command) {
+            self.dispatched
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn send_rejects_an_unsupported_kind_without_dispatching() {
+        let sink = CountingSink::supporting(&[CommandKind::Move]);
+        let dispatcher = Dispatcher::new(sink.clone(), Duration::from_secs(5));
+
+        let outcome = dispatcher.send(a_patrol()).await;
+
+        assert_eq!(
+            outcome,
+            CommandOutcome::Failure("not supported".to_string())
+        );
+        assert_eq!(sink.dispatched(), 0);
+        assert_eq!(dispatcher.pending.lock().borrow().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn send_rejects_everything_when_the_sink_supports_nothing() {
+        let sink = CountingSink::supporting(&[]);
+        let dispatcher = Dispatcher::new(sink.clone(), Duration::from_secs(5));
+
+        for command in one_of_each_kind() {
+            assert_eq!(
+                dispatcher.send(command).await,
+                CommandOutcome::Failure("not supported".to_string())
+            );
+        }
+        assert_eq!(sink.dispatched(), 0);
+    }
+
+    #[tokio::test]
+    async fn send_still_dispatches_a_supported_kind() {
+        tokio::time::pause();
+        let sink = CountingSink::supporting(&[CommandKind::Move]);
+        let dispatcher = Dispatcher::new(sink.clone(), Duration::from_millis(20));
+
+        // The sink never acks, so reaching the timeout (not "not supported")
+        // is what shows the command got through to it.
+        let outcome = dispatcher.send(move_command("g1")).await;
+
+        assert_eq!(outcome, CommandOutcome::Failure("timeout".to_string()));
+        assert_eq!(sink.dispatched(), 1);
+    }
+
+    #[test]
+    fn supported_is_sorted_and_deduplicated() {
+        let sink = CountingSink::supporting(&[
+            CommandKind::Patrol,
+            CommandKind::Move,
+            CommandKind::Patrol,
+        ]);
+        let dispatcher = Dispatcher::new(sink, Duration::from_secs(5));
+
+        assert_eq!(
+            dispatcher.supported(),
+            &[CommandKind::Move, CommandKind::Patrol]
+        );
+        assert!(dispatcher.supports(CommandKind::Move));
+        assert!(!dispatcher.supports(CommandKind::Support));
+    }
+
     struct NoopSink;
     impl CommandSink for NoopSink {
+        fn supported(&self) -> &[CommandKind] {
+            CommandKind::ALL
+        }
         fn dispatch(&self, _id: CommandId, _command: &Command) {}
     }
 
@@ -363,6 +602,9 @@ mod tests {
         id_tx: Mutex<Option<oneshot::Sender<CommandId>>>,
     }
     impl CommandSink for NotifyingSink {
+        fn supported(&self) -> &[CommandKind] {
+            CommandKind::ALL
+        }
         fn dispatch(&self, id: CommandId, _command: &Command) {
             if let Some(tx) = self.id_tx.lock().take() {
                 let _ = tx.send(id);
@@ -378,6 +620,9 @@ mod tests {
         dispatcher: std::sync::OnceLock<std::sync::Weak<Dispatcher>>,
     }
     impl CommandSink for SynchronousAckSink {
+        fn supported(&self) -> &[CommandKind] {
+            CommandKind::ALL
+        }
         fn dispatch(&self, id: CommandId, _command: &Command) {
             if let Some(dispatcher) = self.dispatcher.get().and_then(std::sync::Weak::upgrade) {
                 dispatcher.complete(id, CommandOutcome::Success);

@@ -4,6 +4,11 @@
     "minerva"/"command" ExtensionCallback payload: [id, type, groupId, ...],
     see ArmaCommandSink (minerva-arma3's src/sink.rs) for the exact shape
     per type. Always ends with a command:ack.
+
+    Handles move, search_and_destroy and patrol, the kinds ArmaCommandSink
+    declares as supported; the server rejects every other kind before it gets
+    here, so the default case below is only a safety net. Add a case here and
+    the kind to the sink's list together.
 */
 params ["_id", "_type", "_groupId"];
 private _extra = _this select [3];
@@ -101,12 +106,6 @@ switch (_type) do {
         };
         [_group] call _fnc_startRoute;
         [_id, true] call _fnc_ack;
-    };
-    case "defend_zone": {
-        [_id, false, "not implemented"] call _fnc_ack;
-    };
-    case "support": {
-        [_id, false, "not implemented"] call _fnc_ack;
     };
     default {
         [_id, false, format ["unknown command type: %1", _type]] call _fnc_ack;
