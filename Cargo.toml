@@ -13,7 +13,7 @@ arma-rs = "1.13"
 async-trait = "0.1"
 criterion = "0.8"
 minerva-server = { path = "server" }
-parking_lot = "0.12"
+parking_lot = "0.13"
 prost = "0.14"
 tokio = "1"
 tokio-stream = "0.1"
