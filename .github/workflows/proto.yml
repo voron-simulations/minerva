@@ -36,7 +36,7 @@ jobs:
       # Pushes to BSR on every push to main; breaking is checked against the
       # PR base, scoped to the same subdirectory.
       - name: buf
-        uses: bufbuild/buf-action@85aebf73123b5c15fd5528aaecbf9129cddf7fa7 # v1.6.0
+        uses: bufbuild/buf-action@37ac33d8960807670a6e9719080e885197b09cc6 # v1.7.0
         with:
           input: proto
           token: ${{ secrets.BUF_TOKEN }}
